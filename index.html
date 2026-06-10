@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Cup 2026 Sweepstake</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="header-left">
+      <span class="ball">⚽</span>
+      <div>
+        <h1>World Cup 2026</h1>
+        <p class="subtitle">Sweepstake</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="pot-display">
+        <span class="pot-label">Prize pot</span>
+        <span class="pot-amount" id="pot-amount">£0</span>
+      </div>
+      <div class="status-badges">
+        <span class="badge" id="api-badge">Connecting...</span>
+        <button class="refresh-btn" onclick="doFetch()" title="Refresh scores">↻</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <div class="nav-inner">
+    <button class="tab active" onclick="showTab('leaderboard',this)">Leaderboard</button>
+    <button class="tab" onclick="showTab('scores',this)">Scores</button>
+    <button class="tab" onclick="showTab('groups',this)">Groups</button>
+    <button class="tab" onclick="showTab('prizes',this)">Prizes</button>
+    <button class="tab admin-tab" onclick="showTab('admin',this)">Admin</button>
+  </div>
+</nav>
+
+<main>
+  <div id="tab-leaderboard" class="tab-content active"></div>
+  <div id="tab-scores" class="tab-content"></div>
+  <div id="tab-groups" class="tab-content"></div>
+  <div id="tab-prizes" class="tab-content"></div>
+  <div id="tab-admin" class="tab-content"></div>
+</main>
+
+<footer>
+  <p>Auto-refreshes every 60 seconds · Live data from football-data.org</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
