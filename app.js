@@ -404,8 +404,8 @@ function renderAdmin() {
   });
 
   for (const [dateLabel, fixtures] of Object.entries(byDate)) {
-    html += \`<div class="card" style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em">\${dateLabel}</div>\`;
+    html += `<div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em">${dateLabel}</div>`;
     fixtures.forEach(m => { html += scoreRow(m); });
     html += '</div>';
   }
