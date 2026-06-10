@@ -91,10 +91,10 @@ async function doFetch() {
   badge.textContent = 'Fetching...';
   badge.className = 'badge';
   try {
-    // Use a CORS proxy since football-data.org blocks direct browser requests
-    const target = encodeURIComponent(`${FOOTBALL_BASE}/competitions/WC/matches`);
-    const res = await fetch(`https://corsproxy.io/?url=${target}`, {
-      headers: { 'X-Auth-Token': FOOTBALL_KEY }
+    // Route through Cloudflare Worker proxy
+    
+    const res = await fetch('https://wc2026-proxy.kiranchhina06.workers.dev');
+
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
