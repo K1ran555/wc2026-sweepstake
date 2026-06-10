@@ -91,7 +91,9 @@ async function doFetch() {
   badge.textContent = 'Fetching...';
   badge.className = 'badge';
   try {
-    const res = await fetch(`${FOOTBALL_BASE}/competitions/WC/matches`, {
+    // Use a CORS proxy since football-data.org blocks direct browser requests
+    const target = encodeURIComponent(`${FOOTBALL_BASE}/competitions/WC/matches`);
+    const res = await fetch(`https://corsproxy.io/?url=${target}`, {
       headers: { 'X-Auth-Token': FOOTBALL_KEY }
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
