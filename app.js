@@ -89,15 +89,19 @@ async function sbDelete(table, matchObj) {
 }
 
 async function loadAll() {
-  const [parts, sets, mts] = await Promise.all([
+  const [parts, sets] = await Promise.all([
     sbGet('participants', 'select=slot,name,team&order=slot'),
-    sbGet('settings', 'select=key,value'),
-    sbGet('matches', 'select=*&order=id')
+    sbGet('settings', 'select=key,value')
   ]);
   participants = parts;
   settings = {};
   sets.forEach(s => { settings[s.key] = s.value; });
-  matches = mts;
+  // matches table may not exist yet if SQL hasn't been run
+  try {
+    matches = await sbGet('matches', 'select=*&order=id');
+  } catch(e) {
+    matches = [];
+  }
 }
 
 // ── HELPERS ─────────────────────────────────────────────
@@ -604,11 +608,12 @@ async function init() {
   }, 30000);
 }
 
-// Refresh button just reloads data
-document.querySelector('.refresh-btn').onclick = async () => {
+// Refresh button reloads data
+document.querySelector('.refresh-btn').addEventListener('click', async () => {
+  document.getElementById('api-badge').textContent = 'Loading...';
   await loadAll();
   updateStatusBadge();
   refreshCurrent();
-};
+});
 
 init();
