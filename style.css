@@ -170,19 +170,31 @@ main {
 
 /* ── LEADERBOARD ── */
 .lb-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 0; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
 }
 .lb-row:last-child { border-bottom: none; }
-.lb-pos { font-size: 14px; font-weight: 700; width: 28px; text-align: center; flex-shrink: 0; color: var(--text-muted); }
-.lb-name { font-size: 14px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.lb-team {
-  font-size: 11px; padding: 2px 9px; border-radius: 20px;
+.lb-pos { font-size: 15px; font-weight: 700; width: 28px; text-align: center; flex-shrink: 0; color: var(--text-muted); padding-top: 2px; }
+.lb-main { flex: 1; min-width: 0; }
+.lb-top-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.lb-name { font-size: 15px; font-weight: 600; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-pts { font-size: 15px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
+.lb-teams-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.lb-team-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; padding: 3px 8px; border-radius: 20px;
   background: var(--surface-2); border: 1px solid var(--border);
-  color: var(--text-muted); white-space: nowrap; flex-shrink: 0;
+  color: var(--text-muted); white-space: nowrap; max-width: 160px;
+  overflow: hidden; text-overflow: ellipsis;
 }
-.lb-bonus { font-size: 12px; color: var(--text-muted); flex-shrink: 0; min-width: 80px; text-align: right; }
-.lb-pts { font-size: 15px; font-weight: 700; min-width: 34px; text-align: right; flex-shrink: 0; color: var(--gold); }
+.lb-team-chip.strong { border-color: #1a4731; background: #0d2b1a; color: #3fb950; }
+.lb-team-chip.weak { border-color: #5a1a1a; background: #2d1117; color: #f85149; }
+.chip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.green-dot { background: #3fb950; }
+.red-dot { background: #f85149; }
+.chip-pts { font-weight: 700; margin-left: 3px; font-size: 11px; opacity: 0.9; }
+.lb-plus { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.lb-prize-inline { font-size: 11px; font-weight: 600; color: var(--gold); margin-left: 4px; }
 .lb-prize { font-size: 12px; font-weight: 600; color: var(--gold); }
 .lb-row.rank-1 .lb-name { color: #ffd700; }
 .lb-row.rank-2 .lb-name { color: #c0c0c0; }
@@ -302,10 +314,31 @@ footer { text-align: center; padding: 20px 1rem; font-size: 12px; color: var(--t
 textarea { background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--border) !important; }
 
 @media (max-width: 600px) {
-  h1 { font-size: 17px; }
+  h1 { font-size: 16px; }
+  .subtitle { display: none; }
   .pot-amount { font-size: 18px; }
-  .tab { padding: 10px 11px; font-size: 12px; }
-  main { padding: 16px 0.75rem 40px; }
+  .pot-label { font-size: 10px; }
+  .tab { padding: 10px 9px; font-size: 12px; }
+  main { padding: 12px 0.75rem 40px; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .prize-summary { grid-template-columns: repeat(2, 1fr); }
+  .groups-grid { grid-template-columns: 1fr; }
+  .group-table { font-size: 11px; }
+  .group-table th, .group-table td { padding: 5px 4px; }
+  .group-table th:first-child, .group-table td:first-child { padding-left: 8px; }
+  .lb-team-chip { max-width: 130px; font-size: 11px; }
+  .card { padding: 0.75rem 0.9rem; }
+  .match-score { font-size: 17px; min-width: 50px; }
+  .match-team { font-size: 12px; }
+  .header-inner { padding: 10px 0; }
+  .prize-box .pamount { font-size: 15px; }
+  .prize-box .pwinner { font-size: 10px; }
+  .two-col { grid-template-columns: 1fr; }
+  .participants-grid { grid-template-columns: 1fr; }
+  .metric-value { font-size: 20px; }
+}
+
+@media (max-width: 400px) {
+  .tab { padding: 9px 7px; font-size: 11px; }
+  .lb-team-chip { max-width: 110px; }
 }

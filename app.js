@@ -215,17 +215,25 @@ function renderLeaderboard() {
   html += '<div class="section-label">Standings</div><div class="card">';
   lb.forEach(function(entry, i) {
     var medal = i===0?'\ud83e\udd47':i===1?'\ud83e\udd48':i===2?'\ud83e\udd49':'';
-    var prizeAmt = (p>0&&i<3) ? ' &middot; <span class="lb-prize">' + fmt(p*PRIZE_SPLITS[i].pct) + '</span>' : '';
+    var prizeAmt = (p>0&&i<3) ? '<span class="lb-prize">' + fmt(p*PRIZE_SPLITS[i].pct) + '</span>' : '';
     html += '<div class="lb-row rank-' + (i+1) + '">'
       + '<span class="lb-pos">' + (medal||i+1) + '</span>'
+      + '<div class="lb-main">'
+      + '<div class="lb-top-row">'
       + '<span class="lb-name">' + esc(entry.name) + '</span>'
-      + '<span style="display:flex;gap:4px;flex-shrink:0">'
-      + '<span class="lb-team" title="' + esc(entry.team) + ' \u2014 ' + entry.t1pts + ' pts">' + esc(entry.team) + ' <span style="font-weight:700;color:var(--text-primary)">' + entry.t1pts + '</span></span>'
-      + '<span style="font-size:11px;color:var(--text-muted);align-self:center">+</span>'
-      + '<span class="lb-team" title="' + esc(entry.team2) + ' \u2014 ' + entry.t2pts + ' pts">' + esc(entry.team2) + ' <span style="font-weight:700;color:var(--text-primary)">' + entry.t2pts + '</span></span>'
-      + '</span>'
-      + '<span class="lb-bonus">' + prizeAmt + '</span>'
-      + '<span class="lb-pts">' + entry.total + '</span>'
+      + '<span class="lb-pts">' + entry.total + ' pts</span>'
+      + '</div>'
+      + '<div class="lb-teams-row">'
+      + '<span class="lb-team-chip strong" title="' + esc(entry.team) + '">'
+      + '<span class="chip-dot green-dot"></span>'
+      + esc(entry.team) + '<span class="chip-pts">' + entry.t1pts + '</span></span>'
+      + '<span class="lb-plus">+</span>'
+      + '<span class="lb-team-chip weak" title="' + esc(entry.team2) + '">'
+      + '<span class="chip-dot red-dot"></span>'
+      + esc(entry.team2) + '<span class="chip-pts">' + entry.t2pts + '</span></span>'
+      + (prizeAmt ? '<span class="lb-prize-inline">' + prizeAmt + '</span>' : '')
+      + '</div>'
+      + '</div>'
       + '</div>';
   });
   html += '</div>';
