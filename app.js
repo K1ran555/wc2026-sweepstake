@@ -4,18 +4,18 @@ var ENTRY_FEE = 5;
 var ADMIN_PASSWORD = 'wc2026admin';
 
 var GROUPS = {
-  A: ['Mexico','South Africa','South Korea','Czech Republic'],
-  B: ['Switzerland','Cameroon','Serbia','Guatemala'],
-  C: ['Brazil','Croatia','Morocco','Chile'],
-  D: ['Spain','Japan',"C\u00f4te d'Ivoire",'DR Congo'],
-  E: ['Portugal','Ukraine','Algeria','Tanzania'],
-  F: ['Argentina','Saudi Arabia','Canada','Australia'],
+  A: ['Mexico','South Africa','South Korea','Czechia'],
+  B: ['Canada','Switzerland','Qatar','Bosnia & Herz.'],
+  C: ['Brazil','Morocco','Haiti','Scotland'],
+  D: ['USA','Paraguay','Australia','T\u00fcrkiye'],
+  E: ['Germany','Cura\u00e7ao',"C\u00f4te d'Ivoire",'Ecuador'],
+  F: ['Netherlands','Japan','Sweden','Tunisia'],
   G: ['Belgium','Egypt','Iran','New Zealand'],
-  H: ['Netherlands','Hungary','Qatar','Venezuela'],
-  I: ['France','Senegal','Iraq','Norway'],
-  J: ['England','Tunisia','USA','Panama'],
-  K: ['Germany','Colombia','Ecuador','Bosnia & Herz.'],
-  L: ['Uruguay','Turkey','Kenya','Thailand']
+  H: ['Spain','Cape Verde','Saudi Arabia','Uruguay'],
+  I: ['France','Senegal','Norway','Iraq'],
+  J: ['Argentina','Algeria','Austria','Jordan'],
+  K: ['Portugal','DR Congo','Uzbekistan','Colombia'],
+  L: ['England','Croatia','Ghana','Panama']
 };
 
 var STAGE_BONUS = {GROUP_STAGE:0,LAST_32:10,LAST_16:20,QUARTER_FINALS:35,SEMI_FINALS:50,THIRD_PLACE:35,FINAL:0};
@@ -76,7 +76,7 @@ function sbInsert(table, data) {
 
 function loadAll() {
   return Promise.all([
-    sbGet('participants', 'select=slot,name,team&order=slot'),
+    sbGet('participants', 'select=slot,name,team,team2&order=slot'),
     sbGet('settings', 'select=key,value')
   ]).then(function(results) {
     participants = results[0];
@@ -84,9 +84,7 @@ function loadAll() {
     results[1].forEach(function(s) { settings[s.key] = s.value; });
     return sbGet('matches', 'select=*&order=id').then(function(m) {
       matches = m;
-    }).catch(function() {
-      matches = [];
-    });
+    }).catch(function() { matches = []; });
   });
 }
 
@@ -98,20 +96,19 @@ function teamGroup(t) {
   return '?';
 }
 
-function owner(team) {
-  var p = participants.find(function(p) { return p.team === team && p.name; });
-  return p ? p.name : null;
+function ownerOfTeam(team) {
+  for (var i = 0; i < participants.length; i++) {
+    var p = participants[i];
+    if (!p.name) continue;
+    if (p.team === team || p.team2 === team) return p.name;
+  }
+  return null;
 }
 
-function pot() {
-  return participants.filter(function(p) { return p.name; }).length * ENTRY_FEE;
-}
-
+function pot() { return participants.filter(function(p) { return p.name; }).length * ENTRY_FEE; }
 function fmt(n) { return '\u00a3' + Math.round(n); }
 function namedCount() { return participants.filter(function(p) { return p.name; }).length; }
-function esc(s) {
-  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function computeGroupTables() {
   var t = {};
@@ -126,39 +123,53 @@ function computeGroupTables() {
     var gh = teamGroup(h), ga = teamGroup(a);
     if (t[gh] && t[gh][h]) {
       t[gh][h].p++; t[gh][h].gf+=hg; t[gh][h].ga+=ag;
-      if (hg>ag) { t[gh][h].w++; t[gh][h].pts+=3; } else if (hg===ag) { t[gh][h].d++; t[gh][h].pts++; } else t[gh][h].l++;
+      if (hg>ag){t[gh][h].w++;t[gh][h].pts+=3;}else if(hg===ag){t[gh][h].d++;t[gh][h].pts++;}else t[gh][h].l++;
     }
     if (t[ga] && t[ga][a]) {
       t[ga][a].p++; t[ga][a].gf+=ag; t[ga][a].ga+=hg;
-      if (ag>hg) { t[ga][a].w++; t[ga][a].pts+=3; } else if (ag===hg) { t[ga][a].d++; t[ga][a].pts++; } else t[ga][a].l++;
+      if (ag>hg){t[ga][a].w++;t[ga][a].pts+=3;}else if(ag===hg){t[ga][a].d++;t[ga][a].pts++;}else t[ga][a].l++;
     }
   });
   return t;
 }
 
+function getTeamScore(team, tables) {
+  var g = teamGroup(team);
+  var grpPts = (tables[g] && tables[g][team]) ? tables[g][team].pts : 0;
+  var bonus = 0;
+  matches.forEach(function(m) {
+    if (m.stage === 'GROUP_STAGE') return;
+    if (m.home !== team && m.away !== team) return;
+    if (m.home_goals === null || m.away_goals === null) return;
+    var hg = m.home_goals, ag = m.away_goals;
+    if (m.stage === 'FINAL') {
+      if ((m.home===team&&hg>ag)||(m.away===team&&ag>hg)) bonus = Math.max(bonus,100);
+      else bonus = Math.max(bonus,70);
+    } else {
+      var won = (m.home===team&&hg>ag)||(m.away===team&&ag>hg);
+      if (won) bonus = Math.max(bonus, STAGE_BONUS[m.stage]||0);
+    }
+  });
+  return {grpPts:grpPts, bonus:bonus, total:grpPts+bonus};
+}
+
 function computeLeaderboard() {
   var tables = computeGroupTables();
   return participants.filter(function(p) { return p.name; }).map(function(p) {
-    var team = p.team, g = teamGroup(team);
-    var s = (tables[g] && tables[g][team]) || {pts:0,gf:0,ga:0};
-    var bonus = 0;
-    matches.forEach(function(m) {
-      if (m.stage === 'GROUP_STAGE') return;
-      if (m.home !== team && m.away !== team) return;
-      if (m.home_goals === null || m.away_goals === null) return;
-      var hg = m.home_goals, ag = m.away_goals;
-      if (m.stage === 'FINAL') {
-        if ((m.home===team&&hg>ag)||(m.away===team&&ag>hg)) bonus = Math.max(bonus,100);
-        else bonus = Math.max(bonus,70);
-      } else {
-        var won = (m.home===team&&hg>ag)||(m.away===team&&ag>hg);
-        if (won) bonus = Math.max(bonus, STAGE_BONUS[m.stage]||0);
-      }
-    });
-    return {name:p.name,team:team,group:g,gpts:s.pts,bonus:bonus,total:s.pts+bonus};
-  }).sort(function(a,b) { return (b.total-a.total)||(b.gpts-a.gpts); });
+    var s1 = getTeamScore(p.team, tables);
+    var s2 = getTeamScore(p.team2, tables);
+    return {
+      name: p.name,
+      team: p.team,
+      team2: p.team2,
+      t1pts: s1.total,
+      t2pts: s2.total,
+      total: s1.total + s2.total
+    };
+  }).sort(function(a,b) { return b.total - a.total; });
 }
 
+// ── RENDER: LEADERBOARD ──────────────────────────────────
 function renderLeaderboard() {
   var lb = computeLeaderboard();
   var p = pot();
@@ -168,23 +179,21 @@ function renderLeaderboard() {
 
   var html = '<div class="metrics">'
     + '<div class="metric"><div class="metric-label">Prize pot</div><div class="metric-value">' + fmt(p) + '</div></div>'
-    + '<div class="metric"><div class="metric-label">Participants</div><div class="metric-value">' + namedCount() + '<span style="font-size:14px;color:var(--text-muted)">/48</span></div></div>'
+    + '<div class="metric"><div class="metric-label">Participants</div><div class="metric-value">' + namedCount() + '<span style="font-size:14px;color:var(--text-muted)">/30</span></div></div>'
     + '<div class="metric"><div class="metric-label">Matches played</div><div class="metric-value">' + played + '</div></div>'
     + '<div class="metric"><div class="metric-label">Live now</div><div class="metric-value">' + live + '</div></div>'
     + '</div>';
 
   if (p > 0 && lb.length >= 3) {
-    var bgOwner = settings.best_goal_team ? owner(settings.best_goal_team) : null;
-    var gbOwner = settings.golden_boot_team ? owner(settings.golden_boot_team) : null;
+    var bgOwner = settings.best_goal_team ? ownerOfTeam(settings.best_goal_team) : null;
+    var gbOwner = settings.golden_boot_team ? ownerOfTeam(settings.golden_boot_team) : null;
     var winners = [lb[0]&&lb[0].name, lb[1]&&lb[1].name, lb[2]&&lb[2].name, bgOwner, gbOwner];
     html += '<div class="prize-summary">';
     PRIZE_SPLITS.forEach(function(sp, i) {
-      html += '<div class="prize-box ' + sp.cls + '">'
-        + '<div class="picon">' + sp.icon + '</div>'
+      html += '<div class="prize-box ' + sp.cls + '"><div class="picon">' + sp.icon + '</div>'
         + '<div class="plabel">' + sp.label + '</div>'
         + '<div class="pamount">' + fmt(p*sp.pct) + '</div>'
-        + '<div class="pwinner">' + (winners[i]||'TBD') + '</div>'
-        + '</div>';
+        + '<div class="pwinner">' + (winners[i]||'TBD') + '</div></div>';
     });
     html += '</div>';
   }
@@ -199,12 +208,15 @@ function renderLeaderboard() {
   lb.forEach(function(entry, i) {
     var medal = i===0?'\ud83e\udd47':i===1?'\ud83e\udd48':i===2?'\ud83e\udd49':'';
     var prizeAmt = (p>0&&i<3) ? ' &middot; <span class="lb-prize">' + fmt(p*PRIZE_SPLITS[i].pct) + '</span>' : '';
-    var bonusLabel = entry.bonus ? '+'+entry.bonus+' bonus' : 'Grp '+entry.gpts+' pts';
     html += '<div class="lb-row rank-' + (i+1) + '">'
       + '<span class="lb-pos">' + (medal||i+1) + '</span>'
       + '<span class="lb-name">' + esc(entry.name) + '</span>'
-      + '<span class="lb-team">' + entry.team + '</span>'
-      + '<span class="lb-bonus">' + bonusLabel + prizeAmt + '</span>'
+      + '<span style="display:flex;gap:4px;flex-shrink:0">'
+      + '<span class="lb-team" title="' + esc(entry.team) + ' \u2014 ' + entry.t1pts + ' pts">' + esc(entry.team) + ' <span style="font-weight:700;color:var(--text-primary)">' + entry.t1pts + '</span></span>'
+      + '<span style="font-size:11px;color:var(--text-muted);align-self:center">+</span>'
+      + '<span class="lb-team" title="' + esc(entry.team2) + ' \u2014 ' + entry.t2pts + ' pts">' + esc(entry.team2) + ' <span style="font-weight:700;color:var(--text-primary)">' + entry.t2pts + '</span></span>'
+      + '</span>'
+      + '<span class="lb-bonus">' + prizeAmt + '</span>'
       + '<span class="lb-pts">' + entry.total + '</span>'
       + '</div>';
   });
@@ -212,7 +224,9 @@ function renderLeaderboard() {
 
   html += '<div class="section-label" style="margin-top:1.5rem">Scoring key</div>'
     + '<div class="card" style="display:grid;grid-template-columns:1fr auto;gap:6px 32px;font-size:13px">'
-    + '<span style="color:var(--text-muted)">Group stage points</span><span style="font-weight:600;text-align:right">Carry over</span>'
+    + '<span style="color:var(--text-muted)">Each person\u2019s score = Team 1 pts + Team 2 pts</span><span style="font-weight:600;text-align:right">Combined</span>'
+    + '<span style="color:var(--text-muted)">Group stage win</span><span style="font-weight:600;text-align:right">+3</span>'
+    + '<span style="color:var(--text-muted)">Group stage draw</span><span style="font-weight:600;text-align:right">+1</span>'
     + '<span style="color:var(--text-muted)">Round of 32</span><span style="font-weight:600;text-align:right">+10</span>'
     + '<span style="color:var(--text-muted)">Round of 16</span><span style="font-weight:600;text-align:right">+20</span>'
     + '<span style="color:var(--text-muted)">Quarter-final</span><span style="font-weight:600;text-align:right">+35</span>'
@@ -224,6 +238,7 @@ function renderLeaderboard() {
   document.getElementById('tab-leaderboard').innerHTML = html;
 }
 
+// ── RENDER: SCORES ───────────────────────────────────────
 function renderScores() {
   var el = document.getElementById('tab-scores');
   if (!matches.length) {
@@ -241,7 +256,7 @@ function renderScores() {
 }
 
 function matchCard(m, type) {
-  var ho = owner(m.home), ao = owner(m.away);
+  var ho = ownerOfTeam(m.home), ao = ownerOfTeam(m.away);
   var pill = type==='live' ? '<span class="pill pill-live">\u25cf Live</span>'
     : type==='ft' ? '<span class="pill pill-ft">FT</span>'
     : '<span class="pill pill-ns">Upcoming</span>';
@@ -253,10 +268,10 @@ function matchCard(m, type) {
   return '<div class="match-card ' + (type==='live'?'is-live':'') + '">'
     + '<div class="match-teams"><span class="match-team">' + esc(m.home) + '</span>' + scoreHtml + '<span class="match-team away">' + esc(m.away) + '</span></div>'
     + '<div class="match-meta">' + pill + '<span>' + stageLbl + '</span><span>' + m.match_date + ' ' + m.match_time + '</span></div>'
-    + ownersHtml
-    + '</div>';
+    + ownersHtml + '</div>';
 }
 
+// ── RENDER: GROUPS ───────────────────────────────────────
 function renderGroups() {
   var tables = computeGroupTables();
   var html = '<div class="groups-grid">';
@@ -270,7 +285,7 @@ function renderGroups() {
     sorted.forEach(function(t, i) {
       var s = tables[g][t];
       html += '<tr class="' + (s.p>=2&&i<2?'qualified':'') + '">'
-        + '<td>' + t + '</td><td>' + (owner(t)||'\u2014') + '</td>'
+        + '<td>' + t + '</td><td>' + (ownerOfTeam(t)||'\u2014') + '</td>'
         + '<td>' + s.p + '</td><td>' + s.w + '</td><td>' + s.d + '</td><td>' + s.l + '</td>'
         + '<td>' + s.gf + '</td><td>' + s.ga + '</td><td class="pts-col">' + s.pts + '</td></tr>';
     });
@@ -280,27 +295,28 @@ function renderGroups() {
   document.getElementById('tab-groups').innerHTML = html;
 }
 
+// ── RENDER: PRIZES ───────────────────────────────────────
 function renderPrizes() {
   var lb = computeLeaderboard();
   var p = pot();
-  var bgOwner = settings.best_goal_team ? owner(settings.best_goal_team) : null;
-  var gbOwner = settings.golden_boot_team ? owner(settings.golden_boot_team) : null;
+  var bgOwner = settings.best_goal_team ? ownerOfTeam(settings.best_goal_team) : null;
+  var gbOwner = settings.golden_boot_team ? ownerOfTeam(settings.golden_boot_team) : null;
   var winners = [lb[0]&&lb[0].name, lb[1]&&lb[1].name, lb[2]&&lb[2].name, bgOwner, gbOwner];
   var allTeams = Object.keys(GROUPS).reduce(function(a,g) { return a.concat(GROUPS[g]); }, []);
+  var disabled = adminUnlocked ? '' : 'disabled';
 
   var teamOpts = allTeams.map(function(t) {
-    return '<option value="' + t + '"' + (settings.best_goal_team===t?' selected':'') + '>' + t + (owner(t)?' ('+owner(t)+')':'') + '</option>';
+    return '<option value="' + t + '"' + (settings.best_goal_team===t?' selected':'') + '>' + t + (ownerOfTeam(t)?' ('+ownerOfTeam(t)+')':'') + '</option>';
   }).join('');
   var teamOpts2 = allTeams.map(function(t) {
-    return '<option value="' + t + '"' + (settings.golden_boot_team===t?' selected':'') + '>' + t + (owner(t)?' ('+owner(t)+')':'') + '</option>';
+    return '<option value="' + t + '"' + (settings.golden_boot_team===t?' selected':'') + '>' + t + (ownerOfTeam(t)?' ('+ownerOfTeam(t)+')':'') + '</option>';
   }).join('');
 
-  var disabled = adminUnlocked ? '' : 'disabled';
   var html = '<div class="metrics" style="margin-bottom:20px">'
     + '<div class="metric"><div class="metric-label">Total pot</div><div class="metric-value">' + fmt(p) + '</div></div>'
     + '<div class="metric"><div class="metric-label">Entry fee</div><div class="metric-value">\u00a35</div></div>'
     + '<div class="metric"><div class="metric-label">Paid in</div><div class="metric-value">' + namedCount() + '</div></div>'
-    + '<div class="metric"><div class="metric-label">Remaining</div><div class="metric-value">' + (48-namedCount()) + '</div></div>'
+    + '<div class="metric"><div class="metric-label">Remaining</div><div class="metric-value">' + (30-namedCount()) + '</div></div>'
     + '</div>'
     + '<div class="section-label">Prize breakdown</div><div class="card prizes-breakdown">';
 
@@ -316,8 +332,7 @@ function renderPrizes() {
 
   html += '</div>'
     + '<div class="section-label" style="margin-top:1.5rem">Best goal &amp; golden boot</div>'
-    + '<div class="card">'
-    + '<p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Select the team whose player won each award \u2014 their owner gets the prize.</p>'
+    + '<div class="card"><p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Select the team whose player won each award.</p>'
     + '<div class="two-col">'
     + '<div><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">\u26bd Best goal \u2014 team</div>'
     + '<select class="select-field" onchange="updateSetting(\'best_goal_team\',this.value)" ' + disabled + '>'
@@ -326,19 +341,20 @@ function renderPrizes() {
     + '<select class="select-field" onchange="updateSetting(\'golden_boot_team\',this.value)" ' + disabled + '>'
     + '<option value="">\u2014 not yet awarded \u2014</option>' + teamOpts2 + '</select></div>'
     + '</div>'
-    + (!adminUnlocked ? '<p style="font-size:12px;color:var(--text-muted);margin-top:10px">\ud83d\udd12 Unlock Admin tab to change these</p>' : '')
+    + (!adminUnlocked ? '<p style="font-size:12px;color:var(--text-muted);margin-top:10px">\ud83d\udd12 Unlock Admin to change these</p>' : '')
     + '</div>';
 
   document.getElementById('tab-prizes').innerHTML = html;
 }
 
+// ── SCORE ROW ────────────────────────────────────────────
 function scoreRow(m) {
   var hg = m.home_goals !== null ? m.home_goals : '';
   var ag = m.away_goals !== null ? m.away_goals : '';
   var statusOpts = ['NS','LIVE','FT'].map(function(s) {
     return '<option value="' + s + '"' + (m.status===s?' selected':'') + '>' + s + '</option>';
   }).join('');
-  return '<div class="score-row" style="display:grid;grid-template-columns:1fr 40px 12px 40px 70px 20px;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'
+  return '<div style="display:grid;grid-template-columns:1fr 40px 12px 40px 70px 20px;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'
     + '<span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(m.home) + ' vs ' + esc(m.away) + '</span>'
     + '<input type="number" min="0" max="99" value="' + hg + '" placeholder="-" data-id="' + m.id + '" data-side="home" oninput="scheduleScoreSave(this)" style="border:1px solid var(--border);border-radius:6px;padding:5px;text-align:center;font-size:15px;font-weight:700;width:40px">'
     + '<span style="text-align:center;color:var(--text-muted);font-size:12px">\u2013</span>'
@@ -348,6 +364,7 @@ function scoreRow(m) {
     + '</div>';
 }
 
+// ── RENDER: ADMIN ────────────────────────────────────────
 function renderAdmin() {
   var el = document.getElementById('tab-admin');
   if (!adminUnlocked) {
@@ -363,24 +380,29 @@ function renderAdmin() {
   }
 
   var nc = namedCount();
-  var pct = Math.round((nc/48)*100);
+  var pct = Math.round((nc/30)*100);
 
   var html = '<div class="alert info">Logged in as admin. All changes save instantly for everyone.</div>'
     + '<div class="card" style="margin-bottom:16px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    + '<span class="section-label" style="margin:0">Participants \u2014 ' + nc + '/48</span>'
+    + '<span class="section-label" style="margin:0">Participants \u2014 ' + nc + '/30</span>'
     + '<span style="font-size:13px;font-weight:600;color:var(--gold-dark)">' + fmt(pot()) + ' pot</span>'
     + '</div>'
     + '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>'
-    + '<div class="progress-label" style="margin-bottom:12px">' + nc + ' of 48 \u00b7 ' + (48-nc) + ' spots left</div>'
+    + '<div class="progress-label" style="margin-bottom:12px">' + nc + ' of 30 \u00b7 ' + (30-nc) + ' spots left</div>'
     + '<div class="participants-grid" id="participants-grid">';
 
   participants.forEach(function(p) {
-    html += '<div class="participant-row ' + (p.name?'filled':'') + '" id="prow-' + p.slot + '">'
+    html += '<div class="participant-row ' + (p.name?'filled':'') + '" id="prow-' + p.slot + '" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px">'
+      + '<div style="display:flex;align-items:center;gap:8px;width:100%">'
       + '<span class="slot-num">' + p.slot + '</span>'
-      + '<input type="text" placeholder="Name\u2026" value="' + esc(p.name) + '" data-slot="' + p.slot + '" oninput="scheduleNameSave(this)"/>'
-      + '<span class="team-name">' + p.team + '</span>'
+      + '<input type="text" placeholder="Name\u2026" value="' + esc(p.name) + '" data-slot="' + p.slot + '" oninput="scheduleNameSave(this)" style="flex:1;border:none;background:transparent;font-size:13px;color:var(--text-primary);outline:none"/>'
       + '<span class="save-indicator" id="save-ind-' + p.slot + '">\u2713</span>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;padding-left:28px">'
+      + '<span style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 8px;color:var(--green);font-weight:500">\ud83d\udfe2 ' + esc(p.team) + '</span>'
+      + '<span style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 8px;color:var(--red);font-weight:500">\ud83d\udd34 ' + esc(p.team2) + '</span>'
+      + '</div>'
       + '</div>';
   });
 
@@ -388,17 +410,18 @@ function renderAdmin() {
     + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">'
     + '<button class="btn" onclick="refreshAll()">\u21bb Reload</button>'
     + '<button class="btn danger" onclick="if(confirm(\'Clear all names?\'))clearAllNames()">Clear all names</button>'
+    + '</div>'
     + '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
     + '<div class="section-label" style="margin-bottom:8px">Bulk assign names</div>'
-    + '<p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Paste one name per line (up to 48). Teams are randomly assigned. Existing names are overwritten.</p>'
+    + '<p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Paste one name per line (up to 30). Names are randomly assigned to slots. Existing names are overwritten.</p>'
     + '<textarea id="bulk-names" style="width:100%;height:160px;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Alice\nBob\nCharlie\n..."></textarea>'
     + '<div style="display:flex;gap:8px;margin-top:8px;align-items:center">'
-    + '<button class="btn gold" onclick="bulkAssign()">Randomly assign teams</button>'
+    + '<button class="btn gold" onclick="bulkAssign()">Randomly assign names to slots</button>'
     + '<span id="bulk-status" style="font-size:12px;color:var(--text-muted)"></span>'
     + '</div></div></div>';
 
-  // Score entry — sorted by status then date
-  html += '<div class="section-label">Enter scores</div>'
+  // Score entry
+  html += '<div class="section-label" style="margin-top:1.5rem">Enter scores</div>'
     + '<div class="alert info" style="margin-bottom:12px">Live games at top, then most recent results, then upcoming.</div>';
 
   var sortedMatches = matches.slice().sort(function(a, b) {
@@ -413,9 +436,7 @@ function renderAdmin() {
   var byDate = {};
   var dateOrder = [];
   sortedMatches.forEach(function(m) {
-    var key = m.status === 'LIVE' ? '\ud83d\udd34 Live now'
-      : m.status === 'FT' ? m.match_date
-      : 'Upcoming \u2014 ' + m.match_date;
+    var key = m.status==='LIVE' ? '\ud83d\udd34 Live now' : m.status==='FT' ? m.match_date : 'Upcoming \u2014 ' + m.match_date;
     if (!byDate[key]) { byDate[key] = []; dateOrder.push(key); }
     byDate[key].push(m);
   });
@@ -433,15 +454,14 @@ function renderAdmin() {
     + '<div class="card"><div style="display:grid;grid-template-columns:1fr auto 1fr auto auto;gap:8px;align-items:center">'
     + '<select id="new-home" class="select-field" style="font-size:13px">'
     + allTeams.map(function(t) { return '<option>' + t + '</option>'; }).join('')
-    + '</select>'
-    + '<span style="font-size:13px;color:var(--text-muted);padding:0 4px">vs</span>'
+    + '</select><span style="font-size:13px;color:var(--text-muted);padding:0 4px">vs</span>'
     + '<select id="new-away" class="select-field" style="font-size:13px">'
     + allTeams.map(function(t) { return '<option>' + t + '</option>'; }).join('')
     + '</select>'
     + '<select id="new-stage" class="select-field" style="font-size:13px">'
     + '<option value="LAST_32">R32</option><option value="LAST_16">R16</option>'
     + '<option value="QUARTER_FINALS">QF</option><option value="SEMI_FINALS">SF</option>'
-    + '<option value="THIRD_PLACE">3rd Place</option><option value="FINAL">Final</option>'
+    + '<option value="THIRD_PLACE">3rd</option><option value="FINAL">Final</option>'
     + '</select>'
     + '<button class="btn gold" onclick="addKnockoutMatch()">+ Add</button>'
     + '</div></div>';
@@ -449,6 +469,7 @@ function renderAdmin() {
   el.innerHTML = html;
 }
 
+// ── ADMIN ACTIONS ────────────────────────────────────────
 function checkAdminPw() {
   var input = document.getElementById('admin-pw-input');
   if (input && input.value === ADMIN_PASSWORD) {
@@ -465,35 +486,35 @@ function scheduleNameSave(input) {
   var name = input.value.trim();
   var row = document.getElementById('prow-' + slot);
   if (row) row.className = 'participant-row ' + (name?'filled':'');
-  clearTimeout(saveTimers['n-' + slot]);
-  saveTimers['n-' + slot] = setTimeout(function() { saveName(slot, name); }, 600);
+  clearTimeout(saveTimers['n-'+slot]);
+  saveTimers['n-'+slot] = setTimeout(function() { saveName(slot, name); }, 600);
 }
 
 function saveName(slot, name) {
   sbPatch('participants', {slot:slot}, {name:name}).then(function() {
-    var p = participants.find(function(p) { return p.slot === slot; });
+    var p = participants.find(function(p) { return p.slot===slot; });
     if (p) p.name = name;
-    flashIndicator('save-ind-' + slot);
+    flashIndicator('save-ind-'+slot);
     document.getElementById('pot-amount').textContent = fmt(pot());
   }).catch(function(e) { console.error('Name save failed:', e); });
 }
 
 function scheduleScoreSave(input) {
   var id = parseInt(input.dataset.id);
-  clearTimeout(saveTimers['s-' + id]);
-  saveTimers['s-' + id] = setTimeout(function() { saveScore(id); }, 700);
+  clearTimeout(saveTimers['s-'+id]);
+  saveTimers['s-'+id] = setTimeout(function() { saveScore(id); }, 700);
 }
 
 function saveScore(id) {
-  var hInput = document.querySelector('input[data-id="' + id + '"][data-side="home"]');
-  var aInput = document.querySelector('input[data-id="' + id + '"][data-side="away"]');
-  if (!hInput || !aInput) return;
-  var hg = hInput.value !== '' ? parseInt(hInput.value) : null;
-  var ag = aInput.value !== '' ? parseInt(aInput.value) : null;
+  var hInput = document.querySelector('input[data-id="'+id+'"][data-side="home"]');
+  var aInput = document.querySelector('input[data-id="'+id+'"][data-side="away"]');
+  if (!hInput||!aInput) return;
+  var hg = hInput.value!=='' ? parseInt(hInput.value) : null;
+  var ag = aInput.value!=='' ? parseInt(aInput.value) : null;
   sbPatch('matches', {id:id}, {home_goals:hg, away_goals:ag}).then(function() {
-    var m = matches.find(function(m) { return m.id === id; });
-    if (m) { m.home_goals = hg; m.away_goals = ag; }
-    flashIndicator('score-ind-' + id);
+    var m = matches.find(function(m) { return m.id===id; });
+    if (m) { m.home_goals=hg; m.away_goals=ag; }
+    flashIndicator('score-ind-'+id);
     refreshCurrent();
   }).catch(function(e) { console.error('Score save failed:', e); });
 }
@@ -502,9 +523,9 @@ function saveStatus(sel) {
   var id = parseInt(sel.dataset.id);
   var status = sel.value;
   sbPatch('matches', {id:id}, {status:status}).then(function() {
-    var m = matches.find(function(m) { return m.id === id; });
+    var m = matches.find(function(m) { return m.id===id; });
     if (m) m.status = status;
-    flashIndicator('score-ind-' + id);
+    flashIndicator('score-ind-'+id);
     refreshCurrent();
   }).catch(function(e) { console.error('Status save failed:', e); });
 }
@@ -513,24 +534,49 @@ function addKnockoutMatch() {
   var home = document.getElementById('new-home').value;
   var away = document.getElementById('new-away').value;
   var stage = document.getElementById('new-stage').value;
-  if (home === away) { alert('Home and away teams must be different'); return; }
-  sbInsert('matches', {home:home, away:away, stage:stage, match_date:'TBC', match_time:'', status:'NS'})
-    .then(function(result) {
-      matches.push(result[0]);
-      renderAdmin();
-    }).catch(function(e) { console.error('Add match failed:', e); });
+  if (home===away) { alert('Home and away teams must be different'); return; }
+  sbInsert('matches', {home:home,away:away,stage:stage,match_date:'TBC',match_time:'',status:'NS'})
+    .then(function(result) { matches.push(result[0]); renderAdmin(); })
+    .catch(function(e) { console.error('Add match failed:', e); });
+}
+
+function bulkAssign() {
+  var textarea = document.getElementById('bulk-names');
+  var statusEl = document.getElementById('bulk-status');
+  if (!textarea) return;
+  var names = textarea.value.split('\n').map(function(n) { return n.trim(); }).filter(function(n) { return n.length>0; });
+  if (!names.length) { if (statusEl) statusEl.textContent = 'No names entered.'; return; }
+  if (names.length > 30) { if (statusEl) statusEl.textContent = 'Max 30 names. You entered ' + names.length + '.'; return; }
+  var slots = participants.slice();
+  for (var i = slots.length-1; i > 0; i--) {
+    var j = Math.floor(Math.random()*(i+1));
+    var tmp = slots[i]; slots[i] = slots[j]; slots[j] = tmp;
+  }
+  if (statusEl) statusEl.textContent = 'Saving\u2026';
+  var promises = participants.map(function(p, idx) {
+    var name = idx < names.length ? names[idx] : '';
+    var slot = slots[idx].slot;
+    return sbPatch('participants', {slot:slot}, {name:name}).then(function() {
+      var orig = participants.find(function(x) { return x.slot===slot; });
+      if (orig) orig.name = name;
+    });
+  });
+  Promise.all(promises).then(function() {
+    if (statusEl) statusEl.textContent = names.length + ' names assigned \u2713';
+    renderAdmin();
+  }).catch(function(e) { if (statusEl) statusEl.textContent = 'Error: '+e.message; });
 }
 
 function flashIndicator(id) {
   var el = document.getElementById(id);
-  if (el) { el.style.opacity = '1'; setTimeout(function() { el.style.opacity = '0'; }, 1500); }
+  if (el) { el.style.opacity='1'; setTimeout(function() { el.style.opacity='0'; }, 1500); }
 }
 
 function updateSetting(key, value) {
   sbPatch('settings', {key:key}, {value:value}).then(function() {
     settings[key] = value;
     renderPrizes();
-    if (currentTab === 'leaderboard') renderLeaderboard();
+    if (currentTab==='leaderboard') renderLeaderboard();
   }).catch(function(e) { console.error('Setting save failed:', e); });
 }
 
@@ -538,50 +584,9 @@ function refreshAll() {
   loadAll().then(function() { refreshCurrent(); });
 }
 
-
-function bulkAssign() {
-  var textarea = document.getElementById('bulk-names');
-  var statusEl = document.getElementById('bulk-status');
-  if (!textarea) return;
-  var names = textarea.value.split('\n')
-    .map(function(n) { return n.trim(); })
-    .filter(function(n) { return n.length > 0; });
-  if (names.length === 0) {
-    if (statusEl) statusEl.textContent = 'No names entered.';
-    return;
-  }
-  if (names.length > 48) {
-    if (statusEl) statusEl.textContent = 'Max 48 names. You entered ' + names.length + '.';
-    return;
-  }
-  // Fisher-Yates shuffle of participant slots
-  var slots = participants.slice();
-  for (var i = slots.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
-    var tmp = slots[i]; slots[i] = slots[j]; slots[j] = tmp;
-  }
-  // Assign names to shuffled slots, clear the rest
-  var promises = participants.map(function(p, idx) {
-    var name = idx < names.length ? names[idx] : '';
-    // Find which slot got this position
-    var slot = slots[idx].slot;
-    return sbPatch('participants', {slot: slot}, {name: name}).then(function() {
-      var orig = participants.find(function(x) { return x.slot === slot; });
-      if (orig) orig.name = name;
-    });
-  });
-  if (statusEl) statusEl.textContent = 'Saving…';
-  Promise.all(promises).then(function() {
-    if (statusEl) statusEl.textContent = names.length + ' names assigned ✓';
-    renderAdmin();
-  }).catch(function(e) {
-    if (statusEl) statusEl.textContent = 'Error: ' + e.message;
-  });
-}
-
 function clearAllNames() {
   var promises = participants.map(function(p) {
-    return sbPatch('participants', {slot:p.slot}, {name:''}).then(function() { p.name = ''; });
+    return sbPatch('participants', {slot:p.slot}, {name:''}).then(function() { p.name=''; });
   });
   Promise.all(promises).then(function() { renderAdmin(); });
 }
@@ -590,30 +595,29 @@ function showTab(tab, btn) {
   document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
   btn.classList.add('active');
   document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
-  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
   currentTab = tab;
   refreshCurrent();
 }
 
 function refreshCurrent() {
-  if (currentTab === 'leaderboard') renderLeaderboard();
-  else if (currentTab === 'scores') renderScores();
-  else if (currentTab === 'groups') renderGroups();
-  else if (currentTab === 'prizes') renderPrizes();
-  else if (currentTab === 'admin') renderAdmin();
+  if (currentTab==='leaderboard') renderLeaderboard();
+  else if (currentTab==='scores') renderScores();
+  else if (currentTab==='groups') renderGroups();
+  else if (currentTab==='prizes') renderPrizes();
+  else if (currentTab==='admin') renderAdmin();
 }
 
 function updateStatusBadge() {
   var badge = document.getElementById('api-badge');
   var ft = matches.filter(function(m) { return m.status==='FT'; }).length;
   var live = matches.filter(function(m) { return m.status==='LIVE'; }).length;
-  if (live) { badge.textContent = '\u25cf ' + live + ' live'; badge.className = 'badge live'; }
-  else if (ft) { badge.textContent = ft + ' results'; badge.className = 'badge'; }
-  else { badge.textContent = 'No scores yet'; badge.className = 'badge'; }
+  if (live) { badge.textContent='\u25cf '+live+' live'; badge.className='badge live'; }
+  else if (ft) { badge.textContent=ft+' results'; badge.className='badge'; }
+  else { badge.textContent='No scores yet'; badge.className='badge'; }
 }
 
 document.getElementById('api-badge').textContent = 'Loading\u2026';
-
 
 loadAll().then(function() {
   updateStatusBadge();
@@ -626,8 +630,5 @@ loadAll().then(function() {
 });
 
 setInterval(function() {
-  loadAll().then(function() {
-    updateStatusBadge();
-    refreshCurrent();
-  }).catch(function() {});
+  loadAll().then(function() { updateStatusBadge(); refreshCurrent(); }).catch(function() {});
 }, 30000);
