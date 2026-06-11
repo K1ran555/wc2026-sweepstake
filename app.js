@@ -34,6 +34,7 @@ var matches = [];
 var currentTab = 'leaderboard';
 var adminUnlocked = false;
 var saveTimers = {};
+var adminSubTab = 'scores';
 
 var SB_HEADERS = {
   'apikey': SUPABASE_KEY,
@@ -397,93 +398,101 @@ function renderAdmin() {
   }
 
   var nc = namedCount();
-  var pct = Math.round((nc/28)*100);
 
-  var html = '<div class="alert info">Logged in as admin. All changes save instantly for everyone.</div>'
-    + '<div class="card" style="margin-bottom:16px">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    + '<span class="section-label" style="margin:0">Participants \u2014 ' + nc + '/28</span>'
-    + '<span style="font-size:13px;font-weight:600;color:var(--gold-dark)">' + fmt(pot()) + ' pot</span>'
-    + '</div>'
-    + '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>'
-    + '<div class="progress-label" style="margin-bottom:12px">' + nc + ' of 28 \u00b7 ' + (28-nc) + ' spots left</div>'
-    + '<div class="participants-grid" id="participants-grid">';
+  // Sub-tab bar
+  var html = '<div class="alert info" style="margin-bottom:12px">Logged in as admin. Changes save instantly for everyone.</div>'
+    + '<div class="admin-subtabs">'
+    + '<button class="admin-subtab' + (adminSubTab==='scores'?' active':'') + '" onclick="switchAdminTab(\'scores\')">\u26bd Scores</button>'
+    + '<button class="admin-subtab' + (adminSubTab==='participants'?' active':'') + '" onclick="switchAdminTab(\'participants\')">\ud83d\udc65 Participants</button>'
+    + '</div>';
 
-  participants.forEach(function(p) {
-    html += '<div class="participant-row ' + (p.name?'filled':'') + '" id="prow-' + p.slot + '" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px">'
-      + '<div style="display:flex;align-items:center;gap:8px;width:100%">'
-      + '<span class="slot-num">' + p.slot + '</span>'
-      + '<input type="text" placeholder="Name\u2026" value="' + esc(p.name) + '" data-slot="' + p.slot + '" oninput="scheduleNameSave(this)" style="flex:1;border:none;background:transparent;font-size:13px;color:var(--text-primary);outline:none"/>'
-      + '<span class="save-indicator" id="save-ind-' + p.slot + '">\u2713</span>'
+  // ── SCORES SUB-TAB ──
+  if (adminSubTab === 'scores') {
+    var sortedMatches = matches.slice().sort(function(a, b) {
+      var ord = {LIVE:0, FT:1, NS:2};
+      var sa = ord[a.status] !== undefined ? ord[a.status] : 1;
+      var sb = ord[b.status] !== undefined ? ord[b.status] : 1;
+      if (sa !== sb) return sa - sb;
+      if (a.status === 'FT') return b.id - a.id;
+      return a.id - b.id;
+    });
+    var byDate = {};
+    var dateOrder = [];
+    sortedMatches.forEach(function(m) {
+      var key = m.status==='LIVE' ? '\ud83d\udd34 Live now' : m.status==='FT' ? m.match_date : 'Upcoming \u2014 ' + m.match_date;
+      if (!byDate[key]) { byDate[key] = []; dateOrder.push(key); }
+      byDate[key].push(m);
+    });
+    dateOrder.forEach(function(dateLabel) {
+      html += '<div class="card" style="margin-bottom:12px">'
+        + '<div class="date-block-header">' + dateLabel + '</div>';
+      byDate[dateLabel].forEach(function(m) { html += scoreRow(m); });
+      html += '</div>';
+    });
+    // Add knockout fixture
+    var allTeams = Object.keys(GROUPS).reduce(function(a,g) { return a.concat(GROUPS[g]); }, []);
+    html += '<div class="section-label" style="margin-top:1rem">Add knockout fixture</div>'
+      + '<div class="card"><div style="display:grid;grid-template-columns:1fr auto 1fr auto auto;gap:8px;align-items:center;flex-wrap:wrap">'
+      + '<select id="new-home" class="select-field" style="font-size:13px">'
+      + allTeams.map(function(t) { return '<option>' + t + '</option>'; }).join('')
+      + '</select><span style="font-size:13px;color:var(--text-muted);padding:0 4px">vs</span>'
+      + '<select id="new-away" class="select-field" style="font-size:13px">'
+      + allTeams.map(function(t) { return '<option>' + t + '</option>'; }).join('')
+      + '</select>'
+      + '<select id="new-stage" class="select-field" style="font-size:13px">'
+      + '<option value="LAST_32">R32</option><option value="LAST_16">R16</option>'
+      + '<option value="QUARTER_FINALS">QF</option><option value="SEMI_FINALS">SF</option>'
+      + '<option value="THIRD_PLACE">3rd</option><option value="FINAL">Final</option>'
+      + '</select>'
+      + '<button class="btn gold" onclick="addKnockoutMatch()">+ Add</button>'
+      + '</div></div>';
+  }
+
+  // ── PARTICIPANTS SUB-TAB ──
+  if (adminSubTab === 'participants') {
+    var pct = Math.round((nc/28)*100);
+    html += '<div class="card" style="margin-bottom:16px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      + '<span class="section-label" style="margin:0">Participants \u2014 ' + nc + '/28</span>'
+      + '<span style="font-size:13px;font-weight:600;color:var(--gold)">' + fmt(pot()) + ' pot</span>'
       + '</div>'
-      + '<div style="display:flex;gap:6px;padding-left:28px">'
-      + '<span style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 8px;color:var(--green);font-weight:500">\ud83d\udfe2 ' + esc(p.team) + '</span>'
-      + '<span style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 8px;color:var(--red);font-weight:500">\ud83d\udd34 ' + esc(p.team2) + '</span>'
+      + '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>'
+      + '<div class="progress-label" style="margin-bottom:12px">' + nc + ' of 28 \u00b7 ' + (28-nc) + ' spots left</div>'
+      + '<div class="participants-grid" id="participants-grid">';
+    participants.forEach(function(p) {
+      html += '<div class="participant-row ' + (p.name?'filled':'') + '" id="prow-' + p.slot + '" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px">'
+        + '<div style="display:flex;align-items:center;gap:8px;width:100%">'
+        + '<span class="slot-num">' + p.slot + '</span>'
+        + '<input type="text" placeholder="Name\u2026" value="' + esc(p.name) + '" data-slot="' + p.slot + '" oninput="scheduleNameSave(this)" style="flex:1;border:none;background:transparent;font-size:13px;color:var(--text);outline:none"/>'
+        + '<span class="save-indicator" id="save-ind-' + p.slot + '">\u2713</span>'
+        + '</div>'
+        + '<div style="display:flex;gap:6px;padding-left:28px;flex-wrap:wrap">'
+        + '<span style="font-size:11px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:12px;padding:2px 8px;color:var(--green);font-weight:500">\ud83d\udfe2 ' + esc(p.team) + '</span>'
+        + '<span style="font-size:11px;background:var(--red-bg);border:1px solid #5a1a1a;border-radius:12px;padding:2px 8px;color:var(--red);font-weight:500">\ud83d\udd34 ' + esc(p.team2) + '</span>'
+        + '</div>'
+        + '</div>';
+    });
+    html += '</div>'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">'
+      + '<button class="btn" onclick="refreshAll()">\u21bb Reload</button>'
+      + '<button class="btn danger" onclick="if(confirm(\'Clear all names?\'))clearAllNames()">Clear all names</button>'
       + '</div>'
-      + '</div>';
-  });
-
-  html += '</div>'
-    + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">'
-    + '<button class="btn" onclick="refreshAll()">\u21bb Reload</button>'
-    + '<button class="btn danger" onclick="if(confirm(\'Clear all names?\'))clearAllNames()">Clear all names</button>'
-    + '</div>'
-    + '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
-    + '<div class="section-label" style="margin-bottom:8px">Bulk assign names</div>'
-    + '<p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Paste one name per line (up to 28). Names are randomly assigned to slots. Existing names are overwritten.</p>'
-    + '<textarea id="bulk-names" style="width:100%;height:160px;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Alice\nBob\nCharlie\n..."></textarea>'
-    + '<div style="display:flex;gap:8px;margin-top:8px;align-items:center">'
-    + '<button class="btn gold" onclick="bulkAssign()">Randomly assign names to slots</button>'
-    + '<span id="bulk-status" style="font-size:12px;color:var(--text-muted)"></span>'
-    + '</div></div></div>';
-
-  // Score entry
-  html += '<div class="section-label" style="margin-top:1.5rem">Enter scores</div>'
-    + '<div class="alert info" style="margin-bottom:12px">Live games at top, then most recent results, then upcoming.</div>';
-
-  var sortedMatches = matches.slice().sort(function(a, b) {
-    var ord = {LIVE:0, FT:1, NS:2};
-    var sa = ord[a.status] !== undefined ? ord[a.status] : 1;
-    var sb = ord[b.status] !== undefined ? ord[b.status] : 1;
-    if (sa !== sb) return sa - sb;
-    if (a.status === 'FT') return b.id - a.id;
-    return a.id - b.id;
-  });
-
-  var byDate = {};
-  var dateOrder = [];
-  sortedMatches.forEach(function(m) {
-    var key = m.status==='LIVE' ? '\ud83d\udd34 Live now' : m.status==='FT' ? m.match_date : 'Upcoming \u2014 ' + m.match_date;
-    if (!byDate[key]) { byDate[key] = []; dateOrder.push(key); }
-    byDate[key].push(m);
-  });
-
-  dateOrder.forEach(function(dateLabel) {
-    html += '<div class="card" style="margin-bottom:12px">'
-      + '<div class="date-block-header">' + dateLabel + '</div>';
-    byDate[dateLabel].forEach(function(m) { html += scoreRow(m); });
-    html += '</div>';
-  });
-
-  // Add knockout fixture
-  var allTeams = Object.keys(GROUPS).reduce(function(a,g) { return a.concat(GROUPS[g]); }, []);
-  html += '<div class="section-label" style="margin-top:1rem">Add knockout fixture</div>'
-    + '<div class="card"><div style="display:grid;grid-template-columns:1fr auto 1fr auto auto;gap:8px;align-items:center">'
-    + '<select id="new-home" class="select-field" style="font-size:13px">'
-    + allTeams.map(function(t) { return '<option>' + t + '</option>'; }).join('')
-    + '</select><span style="font-size:13px;color:var(--text-muted);padding:0 4px">vs</span>'
-    + '<select id="new-away" class="select-field" style="font-size:13px">'
-    + allTeams.map(function(t) { return '<option>' + t + '</option>'; }).join('')
-    + '</select>'
-    + '<select id="new-stage" class="select-field" style="font-size:13px">'
-    + '<option value="LAST_32">R32</option><option value="LAST_16">R16</option>'
-    + '<option value="QUARTER_FINALS">QF</option><option value="SEMI_FINALS">SF</option>'
-    + '<option value="THIRD_PLACE">3rd</option><option value="FINAL">Final</option>'
-    + '</select>'
-    + '<button class="btn gold" onclick="addKnockoutMatch()">+ Add</button>'
-    + '</div></div>';
+      + '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
+      + '<div class="section-label" style="margin-bottom:8px">Bulk assign names</div>'
+      + '<p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Paste one name per line (up to 28). Randomly assigned. Existing names overwritten.</p>'
+      + '<textarea id="bulk-names" style="width:100%;height:160px;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Alice\nBob\nCharlie\n..."></textarea>'
+      + '<div style="display:flex;gap:8px;margin-top:8px;align-items:center">'
+      + '<button class="btn gold" onclick="bulkAssign()">Randomly assign names to slots</button>'
+      + '<span id="bulk-status" style="font-size:12px;color:var(--text-muted)"></span>'
+      + '</div></div></div>';
+  }
 
   el.innerHTML = html;
+}
+
+function switchAdminTab(sub) {
+  adminSubTab = sub;
+  renderAdmin();
 }
 
 // ── ADMIN ACTIONS ────────────────────────────────────────
