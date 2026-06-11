@@ -309,9 +309,69 @@ main {
 footer { text-align: center; padding: 20px 1rem; font-size: 12px; color: var(--text-light); border-top: 1px solid var(--border); background: var(--surface); margin-top: 2rem; }
 
 /* ── SCORE ROW ── */
-.score-row input { color: var(--text) !important; background: var(--surface-2) !important; }
-.score-row select { color: var(--text) !important; background: var(--surface-2) !important; }
-textarea { background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--border) !important; }
+input[type="number"], input[type="text"], input[type="password"], textarea, select {
+  color: var(--text) !important;
+  background: var(--surface-2) !important;
+  border-color: var(--border) !important;
+}
+input[type="number"]:focus, input[type="text"]:focus, input[type="password"]:focus {
+  outline: 1px solid var(--gold);
+  border-color: var(--gold) !important;
+}
+
+/* Score entry rows */
+.score-entry-row {
+  display: grid;
+  grid-template-columns: 1fr 44px 14px 44px 64px 22px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.score-entry-row:last-child { border-bottom: none; }
+.score-entry-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.score-input {
+  width: 44px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  padding: 6px 4px !important;
+  text-align: center !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+}
+.status-select {
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  padding: 6px 6px !important;
+  font-size: 12px !important;
+  background: var(--surface-2) !important;
+  color: var(--text-muted) !important;
+  cursor: pointer;
+}
+.status-select.live { border-color: var(--green-border) !important; color: var(--green) !important; }
+.status-select.ft { border-color: var(--border) !important; color: var(--text-muted) !important; }
+
+.date-block-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gold);
+  background: var(--navy-light);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+}
 
 @media (max-width: 600px) {
   h1 { font-size: 16px; }

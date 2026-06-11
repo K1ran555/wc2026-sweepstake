@@ -367,16 +367,17 @@ function renderPrizes() {
 function scoreRow(m) {
   var hg = m.home_goals !== null ? m.home_goals : '';
   var ag = m.away_goals !== null ? m.away_goals : '';
+  var statusCls = m.status === 'LIVE' ? 'live' : m.status === 'FT' ? 'ft' : '';
   var statusOpts = ['NS','LIVE','FT'].map(function(s) {
     return '<option value="' + s + '"' + (m.status===s?' selected':'') + '>' + s + '</option>';
   }).join('');
-  return '<div style="display:grid;grid-template-columns:1fr 40px 12px 40px 70px 20px;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'
-    + '<span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(m.home) + ' vs ' + esc(m.away) + '</span>'
-    + '<input type="number" min="0" max="99" value="' + hg + '" placeholder="-" data-id="' + m.id + '" data-side="home" oninput="scheduleScoreSave(this)" style="border:1px solid var(--border);border-radius:6px;padding:5px;text-align:center;font-size:15px;font-weight:700;width:40px">'
-    + '<span style="text-align:center;color:var(--text-muted);font-size:12px">\u2013</span>'
-    + '<input type="number" min="0" max="99" value="' + ag + '" placeholder="-" data-id="' + m.id + '" data-side="away" oninput="scheduleScoreSave(this)" style="border:1px solid var(--border);border-radius:6px;padding:5px;text-align:center;font-size:15px;font-weight:700;width:40px">'
-    + '<select data-id="' + m.id + '" onchange="saveStatus(this)" style="border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px;background:var(--surface)">' + statusOpts + '</select>'
-    + '<span id="score-ind-' + m.id + '" style="font-size:12px;color:var(--green);opacity:0;transition:opacity 0.3s">\u2713</span>'
+  return '<div class="score-entry-row">'
+    + '<span class="score-entry-label">' + esc(m.home) + ' <span style="color:var(--text-muted);font-weight:400">vs</span> ' + esc(m.away) + '</span>'
+    + '<input type="number" min="0" max="99" value="' + hg + '" placeholder="-" data-id="' + m.id + '" data-side="home" oninput="scheduleScoreSave(this)" class="score-input">'
+    + '<span style="text-align:center;color:var(--text-muted);font-size:13px;font-weight:300">\u2013</span>'
+    + '<input type="number" min="0" max="99" value="' + ag + '" placeholder="-" data-id="' + m.id + '" data-side="away" oninput="scheduleScoreSave(this)" class="score-input">'
+    + '<select data-id="' + m.id + '" onchange="saveStatus(this)" class="status-select ' + statusCls + '">' + statusOpts + '</select>'
+    + '<span id="score-ind-' + m.id + '" style="font-size:13px;color:var(--green);opacity:0;transition:opacity 0.3s">\u2713</span>'
     + '</div>';
 }
 
@@ -459,7 +460,7 @@ function renderAdmin() {
 
   dateOrder.forEach(function(dateLabel) {
     html += '<div class="card" style="margin-bottom:12px">'
-      + '<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em">' + dateLabel + '</div>';
+      + '<div class="date-block-header">' + dateLabel + '</div>';
     byDate[dateLabel].forEach(function(m) { html += scoreRow(m); });
     html += '</div>';
   });
