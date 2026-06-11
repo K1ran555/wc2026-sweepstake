@@ -136,12 +136,16 @@ function computeGroupTables() {
 function getTeamScore(team, tables) {
   var g = teamGroup(team);
   var grpPts = (tables[g] && tables[g][team]) ? tables[g][team].pts : 0;
+  var gf = (tables[g] && tables[g][team]) ? tables[g][team].gf : 0;
   var bonus = 0;
+  var koGoals = 0;
   matches.forEach(function(m) {
-    if (m.stage === 'GROUP_STAGE') return;
     if (m.home !== team && m.away !== team) return;
     if (m.home_goals === null || m.away_goals === null) return;
     var hg = m.home_goals, ag = m.away_goals;
+    if (m.stage === 'GROUP_STAGE') return;
+    // Track goals scored in knockout rounds
+    koGoals += (m.home === team) ? hg : ag;
     if (m.stage === 'FINAL') {
       if ((m.home===team&&hg>ag)||(m.away===team&&ag>hg)) bonus = Math.max(bonus,100);
       else bonus = Math.max(bonus,70);
@@ -150,7 +154,7 @@ function getTeamScore(team, tables) {
       if (won) bonus = Math.max(bonus, STAGE_BONUS[m.stage]||0);
     }
   });
-  return {grpPts:grpPts, bonus:bonus, total:grpPts+bonus};
+  return {grpPts:grpPts, bonus:bonus, total:grpPts+bonus, gf:gf+koGoals};
 }
 
 function computeLeaderboard() {
@@ -164,9 +168,13 @@ function computeLeaderboard() {
       team2: p.team2,
       t1pts: s1.total,
       t2pts: s2.total,
-      total: s1.total + s2.total
+      total: s1.total + s2.total,
+      gf: s1.gf + s2.gf  // combined goals scored — tiebreaker
     };
-  }).sort(function(a,b) { return b.total - a.total; });
+  }).sort(function(a,b) {
+    if (b.total !== a.total) return b.total - a.total;
+    return b.gf - a.gf;  // tiebreaker: most goals scored
+  });
 }
 
 // ── RENDER: LEADERBOARD ──────────────────────────────────
