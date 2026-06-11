@@ -388,7 +388,14 @@ function renderAdmin() {
     + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">'
     + '<button class="btn" onclick="refreshAll()">\u21bb Reload</button>'
     + '<button class="btn danger" onclick="if(confirm(\'Clear all names?\'))clearAllNames()">Clear all names</button>'
-    + '</div></div>';
+    + '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
+    + '<div class="section-label" style="margin-bottom:8px">Bulk assign names</div>'
+    + '<p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Paste one name per line (up to 48). Teams are randomly assigned. Existing names are overwritten.</p>'
+    + '<textarea id="bulk-names" style="width:100%;height:160px;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Alice\nBob\nCharlie\n..."></textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:8px;align-items:center">'
+    + '<button class="btn gold" onclick="bulkAssign()">Randomly assign teams</button>'
+    + '<span id="bulk-status" style="font-size:12px;color:var(--text-muted)"></span>'
+    + '</div></div></div>';
 
   // Score entry — sorted by status then date
   html += '<div class="section-label">Enter scores</div>'
@@ -529,6 +536,47 @@ function updateSetting(key, value) {
 
 function refreshAll() {
   loadAll().then(function() { refreshCurrent(); });
+}
+
+
+function bulkAssign() {
+  var textarea = document.getElementById('bulk-names');
+  var statusEl = document.getElementById('bulk-status');
+  if (!textarea) return;
+  var names = textarea.value.split('\n')
+    .map(function(n) { return n.trim(); })
+    .filter(function(n) { return n.length > 0; });
+  if (names.length === 0) {
+    if (statusEl) statusEl.textContent = 'No names entered.';
+    return;
+  }
+  if (names.length > 48) {
+    if (statusEl) statusEl.textContent = 'Max 48 names. You entered ' + names.length + '.';
+    return;
+  }
+  // Fisher-Yates shuffle of participant slots
+  var slots = participants.slice();
+  for (var i = slots.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = slots[i]; slots[i] = slots[j]; slots[j] = tmp;
+  }
+  // Assign names to shuffled slots, clear the rest
+  var promises = participants.map(function(p, idx) {
+    var name = idx < names.length ? names[idx] : '';
+    // Find which slot got this position
+    var slot = slots[idx].slot;
+    return sbPatch('participants', {slot: slot}, {name: name}).then(function() {
+      var orig = participants.find(function(x) { return x.slot === slot; });
+      if (orig) orig.name = name;
+    });
+  });
+  if (statusEl) statusEl.textContent = 'Saving…';
+  Promise.all(promises).then(function() {
+    if (statusEl) statusEl.textContent = names.length + ' names assigned ✓';
+    renderAdmin();
+  }).catch(function(e) {
+    if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+  });
 }
 
 function clearAllNames() {
