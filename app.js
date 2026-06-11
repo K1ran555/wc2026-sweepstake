@@ -187,7 +187,7 @@ function renderLeaderboard() {
 
   var html = '<div class="metrics">'
     + '<div class="metric"><div class="metric-label">Prize pot</div><div class="metric-value">' + fmt(p) + '</div></div>'
-    + '<div class="metric"><div class="metric-label">Participants</div><div class="metric-value">' + namedCount() + '<span style="font-size:14px;color:var(--text-muted)">/30</span></div></div>'
+    + '<div class="metric"><div class="metric-label">Participants</div><div class="metric-value">' + namedCount() + '<span style="font-size:14px;color:var(--text-muted)">/28</span></div></div>'
     + '<div class="metric"><div class="metric-label">Matches played</div><div class="metric-value">' + played + '</div></div>'
     + '<div class="metric"><div class="metric-label">Live now</div><div class="metric-value">' + live + '</div></div>'
     + '</div>';
@@ -324,7 +324,7 @@ function renderPrizes() {
     + '<div class="metric"><div class="metric-label">Total pot</div><div class="metric-value">' + fmt(p) + '</div></div>'
     + '<div class="metric"><div class="metric-label">Entry fee</div><div class="metric-value">\u00a35</div></div>'
     + '<div class="metric"><div class="metric-label">Paid in</div><div class="metric-value">' + namedCount() + '</div></div>'
-    + '<div class="metric"><div class="metric-label">Remaining</div><div class="metric-value">' + (30-namedCount()) + '</div></div>'
+    + '<div class="metric"><div class="metric-label">Remaining</div><div class="metric-value">' + (28-namedCount()) + '</div></div>'
     + '</div>'
     + '<div class="section-label">Prize breakdown</div><div class="card prizes-breakdown">';
 
@@ -388,16 +388,16 @@ function renderAdmin() {
   }
 
   var nc = namedCount();
-  var pct = Math.round((nc/30)*100);
+  var pct = Math.round((nc/28)*100);
 
   var html = '<div class="alert info">Logged in as admin. All changes save instantly for everyone.</div>'
     + '<div class="card" style="margin-bottom:16px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    + '<span class="section-label" style="margin:0">Participants \u2014 ' + nc + '/30</span>'
+    + '<span class="section-label" style="margin:0">Participants \u2014 ' + nc + '/28</span>'
     + '<span style="font-size:13px;font-weight:600;color:var(--gold-dark)">' + fmt(pot()) + ' pot</span>'
     + '</div>'
     + '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>'
-    + '<div class="progress-label" style="margin-bottom:12px">' + nc + ' of 30 \u00b7 ' + (30-nc) + ' spots left</div>'
+    + '<div class="progress-label" style="margin-bottom:12px">' + nc + ' of 28 \u00b7 ' + (28-nc) + ' spots left</div>'
     + '<div class="participants-grid" id="participants-grid">';
 
   participants.forEach(function(p) {
@@ -421,7 +421,7 @@ function renderAdmin() {
     + '</div>'
     + '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">'
     + '<div class="section-label" style="margin-bottom:8px">Bulk assign names</div>'
-    + '<p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Paste one name per line (up to 30). Names are randomly assigned to slots. Existing names are overwritten.</p>'
+    + '<p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Paste one name per line (up to 28). Names are randomly assigned to slots. Existing names are overwritten.</p>'
     + '<textarea id="bulk-names" style="width:100%;height:160px;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;font-family:inherit;resize:vertical" placeholder="Alice\nBob\nCharlie\n..."></textarea>'
     + '<div style="display:flex;gap:8px;margin-top:8px;align-items:center">'
     + '<button class="btn gold" onclick="bulkAssign()">Randomly assign names to slots</button>'
@@ -554,7 +554,7 @@ function bulkAssign() {
   if (!textarea) return;
   var names = textarea.value.split('\n').map(function(n) { return n.trim(); }).filter(function(n) { return n.length>0; });
   if (!names.length) { if (statusEl) statusEl.textContent = 'No names entered.'; return; }
-  if (names.length > 30) { if (statusEl) statusEl.textContent = 'Max 30 names. You entered ' + names.length + '.'; return; }
+  if (names.length > 28) { if (statusEl) statusEl.textContent = 'Max 28 names. You entered ' + names.length + '.'; return; }
   var slots = participants.slice();
   for (var i = slots.length-1; i > 0; i--) {
     var j = Math.floor(Math.random()*(i+1));
