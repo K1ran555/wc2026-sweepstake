@@ -24,8 +24,9 @@ var PRIZE_SPLITS = [
   {pct:0.40,label:'1st place',icon:'\ud83e\udd47',cls:'p1'},
   {pct:0.25,label:'2nd place',icon:'\ud83e\udd48',cls:'p2'},
   {pct:0.15,label:'3rd place',icon:'\ud83e\udd49',cls:'p3'},
-  {pct:0.10,label:'Best goal',icon:'\u26bd',cls:''},
-  {pct:0.10,label:'Golden boot',icon:'\ud83d\udc5f',cls:''}
+  {pct:0.065,label:'Best goal',icon:'\u26bd',cls:''},
+  {pct:0.065,label:'Golden boot',icon:'\ud83d\udc5f',cls:''},
+  {pct:0.07,label:'Worst goal diff',icon:'\ud83d\udfe1',cls:''}
 ];
 
 var participants = [];
@@ -138,15 +139,18 @@ function getTeamScore(team, tables) {
   var g = teamGroup(team);
   var grpPts = (tables[g] && tables[g][team]) ? tables[g][team].pts : 0;
   var gf = (tables[g] && tables[g][team]) ? tables[g][team].gf : 0;
+  var ga = (tables[g] && tables[g][team]) ? tables[g][team].ga : 0;
   var bonus = 0;
-  var koGoals = 0;
+  var koGf = 0;
+  var koGa = 0;
   matches.forEach(function(m) {
     if (m.home !== team && m.away !== team) return;
     if (m.home_goals === null || m.away_goals === null) return;
     var hg = m.home_goals, ag = m.away_goals;
     if (m.stage === 'GROUP_STAGE') return;
-    // Track goals scored in knockout rounds
-    koGoals += (m.home === team) ? hg : ag;
+    // Track goals in knockout rounds
+    koGf += (m.home === team) ? hg : ag;
+    koGa += (m.home === team) ? ag : hg;
     if (m.stage === 'FINAL') {
       if ((m.home===team&&hg>ag)||(m.away===team&&ag>hg)) bonus = Math.max(bonus,100);
       else bonus = Math.max(bonus,70);
@@ -155,7 +159,7 @@ function getTeamScore(team, tables) {
       if (won) bonus = Math.max(bonus, STAGE_BONUS[m.stage]||0);
     }
   });
-  return {grpPts:grpPts, bonus:bonus, total:grpPts+bonus, gf:gf+koGoals};
+  return {grpPts:grpPts, bonus:bonus, total:grpPts+bonus, gf:gf+koGf, ga:ga+koGa};
 }
 
 function computeLeaderboard() {
@@ -170,12 +174,26 @@ function computeLeaderboard() {
       t1pts: s1.total,
       t2pts: s2.total,
       total: s1.total + s2.total,
-      gf: s1.gf + s2.gf  // combined goals scored — tiebreaker
+      gf: s1.gf + s2.gf,  // combined goals scored — tiebreaker for top standings
+      ga: s1.ga + s2.ga,  // combined goals conceded
+      gd: (s1.gf + s2.gf) - (s1.ga + s2.ga)  // combined goal difference
     };
   }).sort(function(a,b) {
     if (b.total !== a.total) return b.total - a.total;
     return b.gf - a.gf;  // tiebreaker: most goals scored
   });
+}
+
+// Returns participant with the worst (lowest) combined goal difference.
+// Tiebreaker: most goals conceded (higher GA = worse)
+function computeWorstGD() {
+  var lb = computeLeaderboard();
+  if (!lb.length) return null;
+  var sorted = lb.slice().sort(function(a, b) {
+    if (a.gd !== b.gd) return a.gd - b.gd; // ascending: most negative first
+    return b.ga - a.ga; // tiebreak: higher GA is "worse"
+  });
+  return sorted[0];
 }
 
 // ── RENDER: LEADERBOARD ──────────────────────────────────
@@ -196,7 +214,9 @@ function renderLeaderboard() {
   if (p > 0 && lb.length >= 3) {
     var bgOwner = settings.best_goal_team ? ownerOfTeam(settings.best_goal_team) : null;
     var gbOwner = settings.golden_boot_team ? ownerOfTeam(settings.golden_boot_team) : null;
-    var winners = [lb[0]&&lb[0].name, lb[1]&&lb[1].name, lb[2]&&lb[2].name, bgOwner, gbOwner];
+    var worstGD = computeWorstGD();
+    var worstGDLabel = worstGD ? worstGD.name + ' (' + (worstGD.gd>0?'+':'') + worstGD.gd + ')' : null;
+    var winners = [lb[0]&&lb[0].name, lb[1]&&lb[1].name, lb[2]&&lb[2].name, bgOwner, gbOwner, worstGDLabel];
     html += '<div class="prize-summary">';
     PRIZE_SPLITS.forEach(function(sp, i) {
       html += '<div class="prize-box ' + sp.cls + '"><div class="picon">' + sp.icon + '</div>'
@@ -318,7 +338,9 @@ function renderPrizes() {
   var p = pot();
   var bgOwner = settings.best_goal_team ? ownerOfTeam(settings.best_goal_team) : null;
   var gbOwner = settings.golden_boot_team ? ownerOfTeam(settings.golden_boot_team) : null;
-  var winners = [lb[0]&&lb[0].name, lb[1]&&lb[1].name, lb[2]&&lb[2].name, bgOwner, gbOwner];
+  var worstGD = computeWorstGD();
+  var worstGDLabel = worstGD ? worstGD.name + ' (' + (worstGD.gd>0?'+':'') + worstGD.gd + ')' : null;
+  var winners = [lb[0]&&lb[0].name, lb[1]&&lb[1].name, lb[2]&&lb[2].name, bgOwner, gbOwner, worstGDLabel];
   var allTeams = Object.keys(GROUPS).reduce(function(a,g) { return a.concat(GROUPS[g]); }, []);
   var disabled = adminUnlocked ? '' : 'disabled';
 
