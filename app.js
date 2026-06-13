@@ -36,6 +36,44 @@ var currentTab = 'leaderboard';
 var adminUnlocked = false;
 var saveTimers = {};
 var adminSubTab = 'scores';
+var scoreSubTab = 'finished';
+
+var MONTH_MAP = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+var TOURNAMENT_YEAR = 2026;
+
+// Parses match_date ("11 Jun") + match_time ("20:00", BST/UTC+1) into a Date
+// representing the real-world kickoff instant. Returns null if unparseable
+// (e.g. knockout fixtures with match_date "TBC").
+function parseMatchDateTime(m) {
+  if (!m.match_date || !m.match_time) return null;
+  var dateParts = m.match_date.trim().split(' ');
+  if (dateParts.length !== 2) return null;
+  var day = parseInt(dateParts[0], 10);
+  var month = MONTH_MAP[dateParts[1]];
+  if (isNaN(day) || month === undefined) return null;
+  var timeParts = m.match_time.split(':');
+  if (timeParts.length !== 2) return null;
+  var hour = parseInt(timeParts[0], 10);
+  var minute = parseInt(timeParts[1], 10);
+  if (isNaN(hour) || isNaN(minute)) return null;
+  // match_time is BST (UTC+1) — subtract 1hr to get the true UTC instant
+  return new Date(Date.UTC(TOURNAMENT_YEAR, month, day, hour - 1, minute));
+}
+
+// Returns 'upcoming', 'live', or 'finished' purely based on the current time
+// vs the parsed kickoff time (+ an assumed match duration).
+function getMatchPhase(m) {
+  var kickoff = parseMatchDateTime(m);
+  if (!kickoff) {
+    return (m.home_goals !== null && m.away_goals !== null) ? 'finished' : 'upcoming';
+  }
+  var now = new Date();
+  var durationMin = (m.stage === 'GROUP_STAGE') ? 130 : 155; // knockouts allow for ET/pens
+  var end = new Date(kickoff.getTime() + durationMin * 60000);
+  if (now < kickoff) return 'upcoming';
+  if (now < end) return 'live';
+  return 'finished';
+}
 
 var SB_HEADERS = {
   'apikey': SUPABASE_KEY,
@@ -282,9 +320,24 @@ function renderScores() {
     el.innerHTML = '<div class="empty"><div class="empty-icon">\u26bd</div>No fixtures loaded yet</div>';
     return;
   }
-  var live = matches.filter(function(m) { return m.status==='LIVE'; });
-  var finished = matches.filter(function(m) { return m.status==='FT'; }).slice().reverse().slice(0,20);
-  var upcoming = matches.filter(function(m) { return m.status==='NS'; }).slice(0,15);
+  var withPhase = matches.map(function(m) { return {m:m, phase:getMatchPhase(m), kickoff:parseMatchDateTime(m)}; });
+
+  var live = withPhase.filter(function(x) { return x.phase==='live'; }).map(function(x) { return x.m; });
+
+  var finished = withPhase.filter(function(x) { return x.phase==='finished'; })
+    .sort(function(a,b) {
+      var ka = a.kickoff ? a.kickoff.getTime() : 0;
+      var kb = b.kickoff ? b.kickoff.getTime() : 0;
+      return kb - ka; // most recent first
+    }).map(function(x) { return x.m; }).slice(0,20);
+
+  var upcoming = withPhase.filter(function(x) { return x.phase==='upcoming'; })
+    .sort(function(a,b) {
+      var ka = a.kickoff ? a.kickoff.getTime() : Infinity;
+      var kb = b.kickoff ? b.kickoff.getTime() : Infinity;
+      return ka - kb; // soonest first
+    }).map(function(x) { return x.m; }).slice(0,15);
+
   var html = '';
   if (live.length) { html += '<div class="section-label">Live now</div>'; live.forEach(function(m) { html += matchCard(m,'live'); }); }
   if (finished.length) { html += '<div class="section-label" style="margin-top:' + (live.length?'1.5rem':'0') + '">Recent results</div>'; finished.forEach(function(m) { html += matchCard(m,'ft'); }); }
@@ -390,16 +443,16 @@ function renderPrizes() {
 function scoreRow(m) {
   var hg = m.home_goals !== null ? m.home_goals : '';
   var ag = m.away_goals !== null ? m.away_goals : '';
-  var statusCls = m.status === 'LIVE' ? 'live' : m.status === 'FT' ? 'ft' : '';
-  var statusOpts = ['NS','LIVE','FT'].map(function(s) {
-    return '<option value="' + s + '"' + (m.status===s?' selected':'') + '>' + s + '</option>';
-  }).join('');
+  var phase = getMatchPhase(m);
+  var badge = phase === 'live' ? '<span class="pill pill-live">\u25cf LIVE</span>'
+    : phase === 'finished' ? '<span class="pill pill-ft">FT</span>'
+    : '<span class="pill pill-ns">Upcoming</span>';
   return '<div class="score-entry-row">'
     + '<span class="score-entry-label">' + esc(m.home) + ' <span style="color:var(--text-muted);font-weight:400">vs</span> ' + esc(m.away) + '</span>'
     + '<input type="number" min="0" max="99" value="' + hg + '" placeholder="-" data-id="' + m.id + '" data-side="home" oninput="scheduleScoreSave(this)" class="score-input">'
     + '<span style="text-align:center;color:var(--text-muted);font-size:13px;font-weight:300">\u2013</span>'
     + '<input type="number" min="0" max="99" value="' + ag + '" placeholder="-" data-id="' + m.id + '" data-side="away" oninput="scheduleScoreSave(this)" class="score-input">'
-    + '<select data-id="' + m.id + '" onchange="saveStatus(this)" class="status-select ' + statusCls + '">' + statusOpts + '</select>'
+    + '<span style="text-align:center">' + badge + '</span>'
     + '<span id="score-ind-' + m.id + '" style="font-size:13px;color:var(--green);opacity:0;transition:opacity 0.3s">\u2713</span>'
     + '</div>';
 }
@@ -430,27 +483,62 @@ function renderAdmin() {
 
   // ── SCORES SUB-TAB ──
   if (adminSubTab === 'scores') {
-    var sortedMatches = matches.slice().sort(function(a, b) {
-      var ord = {LIVE:0, FT:1, NS:2};
-      var sa = ord[a.status] !== undefined ? ord[a.status] : 1;
-      var sb = ord[b.status] !== undefined ? ord[b.status] : 1;
-      if (sa !== sb) return sa - sb;
-      if (a.status === 'FT') return b.id - a.id;
-      return a.id - b.id;
-    });
-    var byDate = {};
-    var dateOrder = [];
-    sortedMatches.forEach(function(m) {
-      var key = m.status==='LIVE' ? '\ud83d\udd34 Live now' : m.status==='FT' ? m.match_date : 'Upcoming \u2014 ' + m.match_date;
-      if (!byDate[key]) { byDate[key] = []; dateOrder.push(key); }
-      byDate[key].push(m);
-    });
-    dateOrder.forEach(function(dateLabel) {
-      html += '<div class="card" style="margin-bottom:12px">'
-        + '<div class="date-block-header">' + dateLabel + '</div>';
-      byDate[dateLabel].forEach(function(m) { html += scoreRow(m); });
-      html += '</div>';
-    });
+    // Nested sub-tabs: Finished Games (incl. live) vs Upcoming
+    html += '<div class="admin-subtabs" style="margin-bottom:14px">'
+      + '<button class="admin-subtab' + (scoreSubTab==='finished'?' active':'') + '" onclick="switchScoreTab(\'finished\')">Finished Games</button>'
+      + '<button class="admin-subtab' + (scoreSubTab==='upcoming'?' active':'') + '" onclick="switchScoreTab(\'upcoming\')">Upcoming</button>'
+      + '</div>';
+
+    var withPhase = matches.map(function(m) { return {m:m, phase:getMatchPhase(m), kickoff:parseMatchDateTime(m)}; });
+
+    if (scoreSubTab === 'finished') {
+      // Games that have commenced (live or finished), latest kickoff first
+      var list = withPhase.filter(function(x) { return x.phase==='live' || x.phase==='finished'; })
+        .sort(function(a,b) {
+          var ka = a.kickoff ? a.kickoff.getTime() : 0;
+          var kb = b.kickoff ? b.kickoff.getTime() : 0;
+          return kb - ka;
+        });
+      if (!list.length) {
+        html += '<div class="empty"><div class="empty-icon">\u23f3</div>No games have started yet</div>';
+      } else {
+        var byDate = {}; var dateOrder = [];
+        list.forEach(function(x) {
+          var key = x.phase==='live' ? '\ud83d\udd34 Live now' : x.m.match_date;
+          if (!byDate[key]) { byDate[key] = []; dateOrder.push(key); }
+          byDate[key].push(x.m);
+        });
+        dateOrder.forEach(function(dateLabel) {
+          html += '<div class="card" style="margin-bottom:12px"><div class="date-block-header">' + dateLabel + '</div>';
+          byDate[dateLabel].forEach(function(m) { html += scoreRow(m); });
+          html += '</div>';
+        });
+      }
+    } else {
+      // Upcoming — not yet commenced, soonest first
+      var list2 = withPhase.filter(function(x) { return x.phase==='upcoming'; })
+        .sort(function(a,b) {
+          var ka = a.kickoff ? a.kickoff.getTime() : Infinity;
+          var kb = b.kickoff ? b.kickoff.getTime() : Infinity;
+          return ka - kb;
+        });
+      if (!list2.length) {
+        html += '<div class="empty"><div class="empty-icon">\ud83d\udcc5</div>No upcoming fixtures</div>';
+      } else {
+        var byDate2 = {}; var dateOrder2 = [];
+        list2.forEach(function(x) {
+          var key = (x.m.match_date === 'TBC') ? 'To be confirmed' : x.m.match_date;
+          if (!byDate2[key]) { byDate2[key] = []; dateOrder2.push(key); }
+          byDate2[key].push(x.m);
+        });
+        dateOrder2.forEach(function(dateLabel) {
+          html += '<div class="card" style="margin-bottom:12px"><div class="date-block-header">' + dateLabel + '</div>';
+          byDate2[dateLabel].forEach(function(m) { html += scoreRow(m); });
+          html += '</div>';
+        });
+      }
+    }
+
     // Add knockout fixture
     var allTeams = Object.keys(GROUPS).reduce(function(a,g) { return a.concat(GROUPS[g]); }, []);
     html += '<div class="section-label" style="margin-top:1rem">Add knockout fixture</div>'
@@ -517,6 +605,11 @@ function switchAdminTab(sub) {
   renderAdmin();
 }
 
+function switchScoreTab(sub) {
+  scoreSubTab = sub;
+  renderAdmin();
+}
+
 // ── ADMIN ACTIONS ────────────────────────────────────────
 function checkAdminPw() {
   var input = document.getElementById('admin-pw-input');
@@ -565,17 +658,6 @@ function saveScore(id) {
     flashIndicator('score-ind-'+id);
     refreshCurrent();
   }).catch(function(e) { console.error('Score save failed:', e); });
-}
-
-function saveStatus(sel) {
-  var id = parseInt(sel.dataset.id);
-  var status = sel.value;
-  sbPatch('matches', {id:id}, {status:status}).then(function() {
-    var m = matches.find(function(m) { return m.id===id; });
-    if (m) m.status = status;
-    flashIndicator('score-ind-'+id);
-    refreshCurrent();
-  }).catch(function(e) { console.error('Status save failed:', e); });
 }
 
 function addKnockoutMatch() {

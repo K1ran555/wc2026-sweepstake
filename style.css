@@ -345,7 +345,7 @@ input[type="number"]:focus, input[type="text"]:focus, input[type="password"]:foc
 /* Score entry rows */
 .score-entry-row {
   display: grid;
-  grid-template-columns: 1fr 44px 14px 44px 64px 22px;
+  grid-template-columns: 1fr 44px 14px 44px 78px 22px;
   gap: 8px;
   align-items: center;
   padding: 10px 0;
