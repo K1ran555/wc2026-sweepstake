@@ -424,20 +424,26 @@ function scoreRow(m){
   var phase=getMatchPhase(m);
   var badge=phase==='live'?'<span class="pill pill-live">\u25cf LIVE</span>':phase==='finished'?'<span class="pill pill-ft">FT</span>':'<span class="pill pill-ns">Soon</span>';
   return'<div class="score-entry-row">'
-    +'<span class="score-entry-label">'+esc(m.home)+' <span style="color:var(--text-muted);font-weight:400">vs</span> '+esc(m.away)+'</span>'
-    +'<div class="score-stepper" data-id="'+m.id+'" data-side="home">'
+    +'<div class="ser-top">'
+    +'<span class="score-entry-label">'+esc(m.home)+'</span>'
+    +'<span class="ser-vs">vs</span>'
+    +'<span class="score-entry-label">'+esc(m.away)+'</span>'
+    +'<span class="ser-badge">'+badge+'</span>'
+    +'<span id="score-ind-'+m.id+'" class="ser-tick">\u2713</span>'
+    +'</div>'
+    +'<div class="ser-bottom">'
+    +'<div class="score-stepper">'
     +'<button class="step-btn" onclick="stepScore('+m.id+',\'home\',-1)">-</button>'
     +'<span class="step-val" id="sv-home-'+m.id+'">'+hg+'</span>'
     +'<button class="step-btn" onclick="stepScore('+m.id+',\'home\',1)">+</button>'
     +'</div>'
-    +'<span style="text-align:center;color:var(--text-muted);font-size:13px">\u2013</span>'
-    +'<div class="score-stepper" data-id="'+m.id+'" data-side="away">'
+    +'<span class="ser-dash">\u2013</span>'
+    +'<div class="score-stepper">'
     +'<button class="step-btn" onclick="stepScore('+m.id+',\'away\',-1)">-</button>'
     +'<span class="step-val" id="sv-away-'+m.id+'">'+ag+'</span>'
     +'<button class="step-btn" onclick="stepScore('+m.id+',\'away\',1)">+</button>'
     +'</div>'
-    +'<span style="text-align:center">'+badge+'</span>'
-    +'<span id="score-ind-'+m.id+'" style="font-size:13px;color:var(--green);opacity:0;transition:opacity 0.3s">\u2713</span>'
+    +'</div>'
     +'</div>';
 }
 
