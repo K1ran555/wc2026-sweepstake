@@ -238,8 +238,8 @@ function computeWorstGD() {
 function renderLeaderboard() {
   var lb = computeLeaderboard();
   var p = pot();
-  var played = matches.filter(function(m) { return m.status==='FT'; }).length;
-  var live = matches.filter(function(m) { return m.status==='LIVE'; }).length;
+  var played = matches.filter(function(m) { return getMatchPhase(m)==='finished'; }).length;
+  var live = matches.filter(function(m) { return getMatchPhase(m)==='live'; }).length;
   document.getElementById('pot-amount').textContent = fmt(p);
 
   var html = '<div class="metrics">'
@@ -441,8 +441,8 @@ function renderPrizes() {
 
 // ── SCORE ROW ────────────────────────────────────────────
 function scoreRow(m) {
-  var hg = m.home_goals !== null ? m.home_goals : '';
-  var ag = m.away_goals !== null ? m.away_goals : '';
+  var hg = m.home_goals !== null ? m.home_goals : 0;
+  var ag = m.away_goals !== null ? m.away_goals : 0;
   var phase = getMatchPhase(m);
   var badge = phase === 'live' ? '<span class="pill pill-live">\u25cf LIVE</span>'
     : phase === 'finished' ? '<span class="pill pill-ft">FT</span>'
@@ -650,8 +650,8 @@ function saveScore(id) {
   var hInput = document.querySelector('input[data-id="'+id+'"][data-side="home"]');
   var aInput = document.querySelector('input[data-id="'+id+'"][data-side="away"]');
   if (!hInput||!aInput) return;
-  var hg = hInput.value!=='' ? parseInt(hInput.value) : null;
-  var ag = aInput.value!=='' ? parseInt(aInput.value) : null;
+  var hg = hInput.value!=='' ? parseInt(hInput.value) : 0;
+  var ag = aInput.value!=='' ? parseInt(aInput.value) : 0;
   sbPatch('matches', {id:id}, {home_goals:hg, away_goals:ag}).then(function() {
     var m = matches.find(function(m) { return m.id===id; });
     if (m) { m.home_goals=hg; m.away_goals=ag; }
@@ -740,8 +740,8 @@ function refreshCurrent() {
 
 function updateStatusBadge() {
   var badge = document.getElementById('api-badge');
-  var ft = matches.filter(function(m) { return m.status==='FT'; }).length;
-  var live = matches.filter(function(m) { return m.status==='LIVE'; }).length;
+  var ft = matches.filter(function(m) { return getMatchPhase(m)==='finished'; }).length;
+  var live = matches.filter(function(m) { return getMatchPhase(m)==='live'; }).length;
   if (live) { badge.textContent='\u25cf '+live+' live'; badge.className='badge live'; }
   else if (ft) { badge.textContent=ft+' results'; badge.className='badge'; }
   else { badge.textContent='No scores yet'; badge.className='badge'; }
