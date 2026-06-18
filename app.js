@@ -24,13 +24,13 @@ var PRIZE_SPLITS = [
   {pct:0.40,label:'1st place',icon:'\ud83e\udd47',cls:'p1'},
   {pct:0.25,label:'2nd place',icon:'\ud83e\udd48',cls:'p2'},
   {pct:0.15,label:'3rd place',icon:'\ud83e\udd49',cls:'p3'},
-  {pct:0.065,label:'Best goal',icon:'\u26bd',cls:''},
+  {pct:0.065,label:'Golden glove',icon:'\ud83e\udde4',cls:''},
   {pct:0.065,label:'Golden boot',icon:'\ud83d\udc5f',cls:''},
   {pct:0.07,label:'Worst goal diff',icon:'\ud83d\udfe1',cls:''}
 ];
 
 var participants = [];
-var settings = {best_goal_team:'',golden_boot_team:''};
+var settings = {golden_glove_team:'',golden_boot_team:''};
 var matches = [];
 var currentTab = 'leaderboard';
 var adminUnlocked = false;
@@ -187,7 +187,7 @@ function renderLeaderboard(){
 
   // Prize summary
   if(p>0&&lb.length>=3){
-    var bgOwner=settings.best_goal_team?ownerOfTeam(settings.best_goal_team):null;
+    var bgOwner=settings.golden_glove_team?ownerOfTeam(settings.golden_glove_team):null;
     var gbOwner=settings.golden_boot_team?ownerOfTeam(settings.golden_boot_team):null;
     var worstGD=computeWorstGD();
     var worstGDLabel=worstGD?worstGD.name+' ('+(worstGD.gd>0?'+':'')+worstGD.gd+')':null;
@@ -204,7 +204,7 @@ function renderLeaderboard(){
 
   // "If tournament ended now" mini-table
   if(p>0&&lb.length>=3){
-    var bgO=settings.best_goal_team?ownerOfTeam(settings.best_goal_team):null;
+    var bgO=settings.golden_glove_team?ownerOfTeam(settings.golden_glove_team):null;
     var gbO=settings.golden_boot_team?ownerOfTeam(settings.golden_boot_team):null;
     var wGD=computeWorstGD();
     html+='<div class="section-label" style="margin-top:1.5rem">If the tournament ended now</div>'
@@ -213,7 +213,7 @@ function renderLeaderboard(){
       {lbl:'1st \ud83e\udd47',name:lb[0]&&lb[0].name,pct:0.40},
       {lbl:'2nd \ud83e\udd48',name:lb[1]&&lb[1].name,pct:0.25},
       {lbl:'3rd \ud83e\udd49',name:lb[2]&&lb[2].name,pct:0.15},
-      {lbl:'Best goal \u26bd',name:bgO,pct:0.065},
+      {lbl:'Golden glove \ud83e\udde4',name:bgO,pct:0.065},
       {lbl:'Golden boot \ud83d\udc5f',name:gbO,pct:0.065},
       {lbl:'Worst GD \ud83d\udfe1',name:wGD&&wGD.name,pct:0.07}
     ];
@@ -375,14 +375,14 @@ function renderGroups(){
 function renderPrizes(){
   var lb=computeLeaderboard();
   var p=pot();
-  var bgOwner=settings.best_goal_team?ownerOfTeam(settings.best_goal_team):null;
+  var bgOwner=settings.golden_glove_team?ownerOfTeam(settings.golden_glove_team):null;
   var gbOwner=settings.golden_boot_team?ownerOfTeam(settings.golden_boot_team):null;
   var worstGD=computeWorstGD();
   var worstGDLabel=worstGD?worstGD.name+' ('+(worstGD.gd>0?'+':'')+worstGD.gd+')':null;
   var winners=[lb[0]&&lb[0].name,lb[1]&&lb[1].name,lb[2]&&lb[2].name,bgOwner,gbOwner,worstGDLabel];
   var allTeams=Object.keys(GROUPS).reduce(function(a,g){return a.concat(GROUPS[g]);}, []);
   var disabled=adminUnlocked?'':'disabled';
-  var teamOpts=allTeams.map(function(t){return'<option value="'+t+'"'+(settings.best_goal_team===t?' selected':'')+'>'+t+(ownerOfTeam(t)?' ('+ownerOfTeam(t)+')':'')+' </option>';}).join('');
+  var teamOpts=allTeams.map(function(t){return'<option value="'+t+'"'+(settings.golden_glove_team===t?' selected':'')+'>'+t+(ownerOfTeam(t)?' ('+ownerOfTeam(t)+')':'')+' </option>';}).join('');
   var teamOpts2=allTeams.map(function(t){return'<option value="'+t+'"'+(settings.golden_boot_team===t?' selected':'')+'>'+t+(ownerOfTeam(t)?' ('+ownerOfTeam(t)+')':'')+' </option>';}).join('');
 
   var html='<div class="metrics" style="margin-bottom:20px">'
@@ -402,11 +402,11 @@ function renderPrizes(){
       +'</div>';
   });
   html+='</div>'
-    +'<div class="section-label" style="margin-top:1.5rem">Best goal &amp; golden boot</div>'
+    +'<div class="section-label" style="margin-top:1.5rem">Golden glove &amp; golden boot</div>'
     +'<div class="card"><p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Select the team whose player won each award.</p>'
     +'<div class="two-col">'
     +'<div><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">\u26bd Best goal \u2014 team</div>'
-    +'<select class="select-field" onchange="updateSetting(\'best_goal_team\',this.value)" '+disabled+'>'
+    +'<select class="select-field" onchange="updateSetting(\'golden_glove_team\',this.value)" '+disabled+'>'
     +'<option value="">\u2014 not yet awarded \u2014</option>'+teamOpts+'</select></div>'
     +'<div><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">\ud83d\udc5f Golden boot \u2014 team</div>'
     +'<select class="select-field" onchange="updateSetting(\'golden_boot_team\',this.value)" '+disabled+'>'
@@ -671,3 +671,193 @@ document.getElementById('api-badge').textContent='Loading\u2026';
 loadAll().then(function(){updateStatusBadge();renderLeaderboard();})
   .catch(function(e){console.error('Init failed:',e);document.getElementById('api-badge').textContent='DB error';document.getElementById('api-badge').className='badge err';renderLeaderboard();});
 setInterval(function(){loadAll().then(function(){updateStatusBadge();refreshCurrent();}).catch(function(){});},30000);
+
+// ============================================================
+// FEATURE ADDITIONS: WhatsApp, Countdown, Spinner, Toast, etc.
+// ============================================================
+
+var lastUpdated = null;
+
+// ── SPINNER ──────────────────────────────────────────────
+function showSpinner(){
+  var el=document.getElementById('tab-leaderboard');
+  if(el&&!el.innerHTML.trim()){
+    el.innerHTML='<div class="loading-spinner"><div class="spinner"></div><p>Loading...</p></div>';
+  }
+}
+function hideSpinner(){
+  var el=document.getElementById('tab-leaderboard');
+  if(el&&el.querySelector('.loading-spinner'))el.innerHTML='';
+}
+
+// ── TOAST ────────────────────────────────────────────────
+function showToast(msg,type){
+  type=type||'error';
+  var ex=document.getElementById('toast-msg');if(ex)ex.remove();
+  var t=document.createElement('div');
+  t.id='toast-msg';t.className='toast toast-'+type;t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(function(){t.classList.add('show');},10);
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){if(t.parentNode)t.remove();},300);},3500);
+}
+
+// ── SCROLL TO TOP ────────────────────────────────────────
+function scrollToTop(){window.scrollTo({top:0,behavior:'smooth'});}
+window.addEventListener('scroll',function(){
+  var btn=document.getElementById('scroll-top-btn');
+  if(btn){
+    btn.style.opacity=window.scrollY>300?'1':'0';
+    btn.style.pointerEvents=window.scrollY>300?'auto':'none';
+  }
+});
+
+// ── COUNTDOWN ────────────────────────────────────────────
+function getNextFixture(){
+  var upcoming=matches.filter(function(m){return getMatchPhase(m)==='upcoming';});
+  if(!upcoming.length)return null;
+  return upcoming.slice().sort(function(a,b){
+    var ka=parseMatchDateTime(a),kb=parseMatchDateTime(b);
+    if(!ka)return 1;if(!kb)return -1;
+    return ka.getTime()-kb.getTime();
+  })[0];
+}
+function getCountdownText(){
+  var next=getNextFixture();if(!next)return'';
+  var kickoff=parseMatchDateTime(next);if(!kickoff)return'';
+  var diff=kickoff.getTime()-Date.now();
+  if(diff<=0)return'Kick-off now!';
+  var h=Math.floor(diff/3600000),m=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
+  if(h>24){var d=Math.floor(h/24);return d+'d '+(h%24)+'h';}
+  if(h>0)return h+'h '+m+'m '+s+'s';
+  if(m>0)return m+'m '+s+'s';
+  return s+'s';
+}
+
+// ── LAST UPDATED ─────────────────────────────────────────
+function getLastUpdatedText(){
+  if(!lastUpdated)return'';
+  var diff=Math.floor((Date.now()-lastUpdated.getTime())/1000);
+  if(diff<10)return'Just updated';
+  if(diff<60)return'Updated '+diff+'s ago';
+  var m=Math.floor(diff/60);
+  if(m<60)return'Updated '+m+'m ago';
+  return'Updated '+Math.floor(m/60)+'h ago';
+}
+
+// ── WHATSAPP SHARE ───────────────────────────────────────
+function shareWhatsApp(){
+  var lb=computeLeaderboard();
+  var top3=lb.slice(0,3).map(function(e,i){
+    var m=['\ud83e\udd47','\ud83e\udd48','\ud83e\udd49'][i];
+    return m+' '+e.name+' - '+e.total+' pts ('+e.team+' & '+e.team2+')';
+  }).join('\n');
+  var msg='\u26bd WC2026 Sweepstake:\n\n'+top3+'\n\nhttps://k1ran555.github.io/wc2026-sweepstake/';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+// ── GROUP STAGE CHECK ────────────────────────────────────
+function isGroupStageComplete(){
+  var gm=matches.filter(function(m){return m.stage==='GROUP_STAGE';});
+  if(gm.length<72)return false;
+  return gm.every(function(m){return getMatchPhase(m)==='finished';});
+}
+
+// ── ENHANCED LEADERBOARD ─────────────────────────────────
+function renderLeaderboard2(){
+  renderLeaderboard();
+  var el=document.getElementById('tab-leaderboard');
+  var p=pot();
+  var topBar='<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">'
+    +'<button class="btn-whatsapp" onclick="shareWhatsApp()">'
+    +'<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:5px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.122 1.528 5.856L.057 23.882l6.188-1.448A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.86 0-3.604-.504-5.102-1.382l-.366-.217-3.793.888.904-3.7-.238-.38A9.946 9.946 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>'
+    +'Share standings</button>'
+    +'<span id="last-updated-display" style="font-size:12px;color:var(--text-muted)">'+getLastUpdatedText()+'</span>'
+    +'</div>';
+  var banner='';
+  if(isGroupStageComplete()){
+    var wgd=computeWorstGD();
+    banner='<div class="stage-banner">\ud83c\udfc1 Group stage complete! Worst GD prize locked in'
+      +(wgd?' — '+esc(wgd.name)+' wins '+fmt(p*0.07)+' GD '+(wgd.gd>0?'+':'')+wgd.gd:'')+'</div>';
+  }
+  el.innerHTML=topBar+banner+el.innerHTML;
+}
+
+// ── ENHANCED SCORES WITH COUNTDOWN ───────────────────────
+function renderScores2(){
+  renderScores();
+  var el=document.getElementById('tab-scores');
+  var next=getNextFixture();
+  if(next){
+    var timeStr=next.match_date+(next.match_time?' '+next.match_time+' BST':'');
+    var bar='<div class="countdown-bar">'
+      +'<span class="countdown-label">\u23f1 Next: '+esc(next.home)+' vs '+esc(next.away)+'</span>'
+      +'<span id="countdown-display" class="countdown-time">'+getCountdownText()+'</span>'
+      +'<span class="countdown-when">'+timeStr+'</span>'
+      +'</div>';
+    el.innerHTML=bar+el.innerHTML;
+  }
+}
+
+// ── PATCH saveScoreDirect for error toast ────────────────
+var _orig_saveScoreDirect=saveScoreDirect;
+saveScoreDirect=function(id){
+  var m=matches.find(function(x){return x.id===id;});
+  if(!m)return;
+  sbPatch('matches',{id:id},{home_goals:m.home_goals,away_goals:m.away_goals}).then(function(){
+    flashIndicator('score-ind-'+id);
+    refreshCurrent();
+  }).catch(function(e){
+    console.error('Score save failed:',e);
+    showToast('Score failed to save \u2014 check connection','error');
+  });
+};
+
+// ── OVERRIDE refreshCurrent ───────────────────────────────
+refreshCurrent=function(){
+  if(currentTab==='leaderboard')renderLeaderboard2();
+  else if(currentTab==='scores')renderScores2();
+  else if(currentTab==='groups')renderGroups();
+  else if(currentTab==='prizes')renderPrizes();
+  else if(currentTab==='admin')renderAdmin();
+};
+
+// ── OVERRIDE showTab ─────────────────────────────────────
+showTab=function(tab,btn){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  btn.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
+  document.getElementById('tab-'+tab).classList.add('active');
+  currentTab=tab;refreshCurrent();
+};
+
+// ── TRACK lastUpdated on each loadAll ────────────────────
+var _orig_loadAll=loadAll;
+loadAll=function(){
+  return _orig_loadAll().then(function(){lastUpdated=new Date();});
+};
+
+// ── 1-SECOND TICK ────────────────────────────────────────
+setInterval(function(){
+  if(currentTab==='scores'){
+    var el=document.getElementById('countdown-display');
+    if(el)el.textContent=getCountdownText();
+  }
+  if(currentTab==='leaderboard'){
+    var tu=document.getElementById('last-updated-display');
+    if(tu)tu.textContent=getLastUpdatedText();
+  }
+},1000);
+
+// ── INIT: show spinner then load ─────────────────────────
+showSpinner();
+loadAll().then(function(){
+  lastUpdated=new Date();
+  hideSpinner();
+  updateStatusBadge();
+  renderLeaderboard2();
+}).catch(function(e){
+  hideSpinner();
+  console.error('Init failed:',e);
+  document.getElementById('api-badge').textContent='DB error';
+  document.getElementById('api-badge').className='badge err';
+});
