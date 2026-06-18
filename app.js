@@ -861,3 +861,640 @@ loadAll().then(function(){
   document.getElementById('api-badge').textContent='DB error';
   document.getElementById('api-badge').className='badge err';
 });
+
+// ============================================================
+// NEW FEATURES: Bracket, My Teams, Push-to-top, Form, Countdown
+// ============================================================
+
+// ── KNOCKOUT BRACKET ─────────────────────────────────────
+function renderBracket(){
+  var el=document.getElementById('tab-bracket');
+  if(!el)return;
+  var ko=matches.filter(function(m){return m.stage!=='GROUP_STAGE';});
+  if(!ko.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">\ud83c\udfc6</div><p>Knockout bracket will appear here once the Round of 32 begins.</p><p style="font-size:12px;color:var(--text-muted);margin-top:8px">Admin can add fixtures using the Admin tab.</p></div>';
+    return;
+  }
+  var stages=['LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','FINAL','THIRD_PLACE'];
+  var stageNames={LAST_32:'Round of 32',LAST_16:'Round of 16',QUARTER_FINALS:'Quarter-finals',SEMI_FINALS:'Semi-finals',FINAL:'Final',THIRD_PLACE:'3rd Place'};
+  var html='<div class="bracket-wrap">';
+  stages.forEach(function(stage){
+    var ms=ko.filter(function(m){return m.stage===stage;});
+    if(!ms.length)return;
+    html+='<div class="bracket-round"><div class="bracket-round-label">'+stageNames[stage]+'</div>';
+    ms.forEach(function(m){
+      var phase=getMatchPhase(m);
+      var done=phase==='finished';
+      var live=phase==='live';
+      var hWin=done&&m.home_goals>m.away_goals;
+      var aWin=done&&m.away_goals>m.home_goals;
+      html+='<div class="bracket-match'+(live?' bracket-live':'')+'">'+
+        '<div class="bracket-team'+(hWin?' bracket-winner':'')+'">'+
+          '<span class="bracket-name">'+esc(m.home)+'</span>'+
+          (done?'<span class="bracket-score">'+m.home_goals+'</span>':'')+
+        '</div>'+
+        '<div class="bracket-team'+(aWin?' bracket-winner':'')+'">'+
+          '<span class="bracket-name">'+esc(m.away)+'</span>'+
+          (done?'<span class="bracket-score">'+m.away_goals+'</span>':'')+
+        '</div>'+
+        (live?'<div class="bracket-live-badge">\u25cf LIVE</div>':'')+
+      '</div>';
+    });
+    html+='</div>';
+  });
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+// ── MY TEAMS BANNER (enhanced, saved to localStorage) ────
+function renderMyTeams(){
+  var el=document.getElementById('tab-myteams');
+  if(!el)return;
+  var lb=computeLeaderboard();
+  var p=pot();
+  var html='<div class="card" style="margin-bottom:16px">'
+    +'<div class="section-label" style="margin-bottom:10px">Who are you?</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<input type="text" id="my-name-input2" placeholder="Type your name..." value="'+esc(myTeamName)+'" '
+    +'style="flex:1;border:1px solid var(--border);border-radius:6px;padding:9px 12px;font-size:14px;background:var(--surface-2);color:var(--text)">'
+    +'<button class="btn gold" onclick="setMyName2()">Go</button>'
+    +'</div></div>';
+
+  if(myTeamName){
+    var me=lb.find(function(e){return e.name.toLowerCase()===myTeamName.toLowerCase();});
+    if(me){
+      var rank=lb.indexOf(me)+1;
+      var prizeAmt=(rank<=3)?fmt(p*PRIZE_SPLITS[rank-1].pct):null;
+      var wgd=computeWorstGD();
+      var worstPrize=(wgd&&wgd.name.toLowerCase()===myTeamName.toLowerCase())?fmt(p*0.07):null;
+      html+='<div class="myteams-card">'
+        +'<div class="myteams-rank">#'+rank+'</div>'
+        +'<div class="myteams-info">'
+        +'<div class="myteams-name">'+esc(me.name)+'</div>'
+        +'<div class="myteams-chips">'
+        +'<span class="lb-team-chip strong"><span class="chip-dot green-dot"></span>'+esc(me.team)+' <span class="chip-pts">'+me.t1pts+'pts</span></span>'
+        +'<span class="lb-plus">+</span>'
+        +'<span class="lb-team-chip weak"><span class="chip-dot red-dot"></span>'+esc(me.team2)+' <span class="chip-pts">'+me.t2pts+'pts</span></span>'
+        +'</div>'
+        +(prizeAmt?'<div class="myteams-prize">\ud83c\udfc6 In prize position \u2014 '+prizeAmt+'</div>':'')
+        +(worstPrize?'<div class="myteams-prize" style="color:var(--text-muted)">\ud83d\udfe1 Leading worst GD \u2014 '+worstPrize+'</div>':'')
+        +'</div>'
+        +'<div class="myteams-total">'+me.total+'<span style="font-size:13px;font-weight:400;color:var(--text-muted)"> pts</span></div>'
+        +'</div>';
+
+      // Show nearby standings
+      html+='<div class="section-label" style="margin-top:1.5rem">Standings around you</div><div class="card">';
+      var start=Math.max(0,rank-3);
+      var end=Math.min(lb.length,rank+2);
+      lb.slice(start,end).forEach(function(entry,idx){
+        var absRank=start+idx+1;
+        var medal=absRank===1?'\ud83e\udd47':absRank===2?'\ud83e\udd48':absRank===3?'\ud83e\udd49':'';
+        var isMe=entry.name.toLowerCase()===myTeamName.toLowerCase();
+        html+='<div class="lb-row'+(isMe?' is-me':'')+'">'
+          +'<span class="lb-pos">'+(medal||absRank)+'</span>'
+          +'<div class="lb-main">'
+          +'<div class="lb-top-row"><span class="lb-name">'+esc(entry.name)+'</span><span class="lb-pts">'+entry.total+' pts</span></div>'
+          +'<div class="lb-teams-row">'
+          +'<span class="lb-team-chip strong"><span class="chip-dot green-dot"></span>'+esc(entry.team)+' <span class="chip-pts">'+entry.t1pts+'</span></span>'
+          +'<span class="lb-plus">+</span>'
+          +'<span class="lb-team-chip weak"><span class="chip-dot red-dot"></span>'+esc(entry.team2)+' <span class="chip-pts">'+entry.t2pts+'</span></span>'
+          +'</div></div></div>';
+      });
+      html+='</div>';
+    } else {
+      html+='<div class="alert info">Name "'+esc(myTeamName)+'" not found in the sweepstake. Check the spelling matches exactly.</div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+function setMyName2(){
+  var input=document.getElementById('my-name-input2');
+  if(input){myTeamName=input.value.trim();localStorage.setItem('wc26_myname',myTeamName);renderMyTeams();}
+}
+
+// ── PUSH-TO-TOP NOTIFICATION ─────────────────────────────
+var prevLeader='';
+function checkLeaderChange(){
+  var lb=computeLeaderboard();
+  if(!lb.length)return;
+  var newLeader=lb[0].name;
+  if(prevLeader&&newLeader!==prevLeader){
+    var banner=document.getElementById('leader-banner');
+    if(!banner){
+      banner=document.createElement('div');
+      banner.id='leader-banner';
+      banner.className='leader-banner';
+      document.body.appendChild(banner);
+    }
+    banner.innerHTML='\ud83d\udc51 <strong>'+esc(newLeader)+'</strong> has taken the lead!';
+    banner.classList.add('show');
+    setTimeout(function(){banner.classList.remove('show');},6000);
+  }
+  prevLeader=newLeader;
+}
+
+// ── FORM GUIDE ───────────────────────────────────────────
+function getTeamForm(team){
+  var played=matches.filter(function(m){
+    return m.stage==='GROUP_STAGE'&&(m.home===team||m.away===team)&&m.home_goals!==null;
+  });
+  played.sort(function(a,b){return a.id-b.id;});
+  return played.map(function(m){
+    var scored=(m.home===team)?m.home_goals:m.away_goals;
+    var conceded=(m.home===team)?m.away_goals:m.home_goals;
+    if(scored>conceded)return'W';
+    if(scored===conceded)return'D';
+    return'L';
+  });
+}
+
+function formBadge(r){
+  if(r==='W')return'<span class="form-w">W</span>';
+  if(r==='D')return'<span class="form-d">D</span>';
+  return'<span class="form-l">L</span>';
+}
+
+// ── PRIZE COUNTDOWN ───────────────────────────────────────
+var PRIZE_DEADLINES=[
+  {label:'Worst GD locked in',date:new Date('2026-06-29T02:30:00Z'),desc:'After last group game (28 Jun 20:00 BST)'},
+  {label:'Golden glove & boot',date:new Date('2026-07-19T18:00:00Z'),desc:'After the Final (19 Jul, ~19:00 BST)'},
+  {label:'Top 3 prizes decided',date:new Date('2026-07-19T22:00:00Z'),desc:'Final result confirmed'}
+];
+
+function prizeCountdownText(deadline){
+  var diff=deadline.getTime()-Date.now();
+  if(diff<=0)return'Decided';
+  var d=Math.floor(diff/86400000);
+  var h=Math.floor((diff%86400000)/3600000);
+  var m=Math.floor((diff%3600000)/60000);
+  if(d>0)return d+'d '+h+'h '+m+'m';
+  if(h>0)return h+'h '+m+'m';
+  return m+'m';
+}
+
+// ── OVERRIDE renderGroups to add form guide ───────────────
+var _orig_renderGroups=renderGroups;
+renderGroups=function(){
+  _orig_renderGroups();
+  var el=document.getElementById('tab-groups');
+  // Re-render with form guides
+  var tables=computeGroupTables();
+  var html='<div class="groups-grid">';
+  Object.keys(GROUPS).forEach(function(g){
+    var sorted=GROUPS[g].slice().sort(function(a,b){
+      var ta=tables[g][a],tb=tables[g][b];
+      return(tb.pts-ta.pts)||((tb.gf-tb.ga)-(ta.gf-ta.ga))||(tb.gf-ta.gf);
+    });
+    var maxPlayed=Math.max.apply(null,sorted.map(function(t){return tables[g][t].p;}));
+    html+='<div class="group-card"><div class="group-header">GROUP '+g+'</div>'
+      +'<table class="group-table"><thead><tr><th>Team</th><th>Owner</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th><th>Form</th></tr></thead><tbody>';
+    sorted.forEach(function(t,i){
+      var s=tables[g][t];
+      var qualified=maxPlayed>=3&&i<2;
+      var eliminated=maxPlayed>=3&&i>=2;
+      var form=getTeamForm(t);
+      var formHtml=form.map(formBadge).join('');
+      html+='<tr class="'+(qualified?'qualified':eliminated?'eliminated':'')+'">'
+        +'<td>'+t+'</td><td>'+(ownerOfTeam(t)||'\u2014')+'</td>'
+        +'<td>'+s.p+'</td><td>'+s.w+'</td><td>'+s.d+'</td><td>'+s.l+'</td>'
+        +'<td>'+s.gf+'</td><td>'+s.ga+'</td><td class="pts-col">'+s.pts+'</td>'
+        +'<td class="form-col">'+formHtml+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  });
+  html+='</div>';
+  el.innerHTML=html;
+};
+
+// ── OVERRIDE renderPrizes to add countdown ────────────────
+var _orig_renderPrizes=renderPrizes;
+renderPrizes=function(){
+  _orig_renderPrizes();
+  var el=document.getElementById('tab-prizes');
+  var cdHtml='<div class="section-label" style="margin-top:1.5rem">Prize decision countdown</div><div class="card">';
+  PRIZE_DEADLINES.forEach(function(pd){
+    var txt=prizeCountdownText(pd.date);
+    var done=pd.date.getTime()<Date.now();
+    cdHtml+='<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+pd.label+'</div>'
+      +'<div style="font-size:11px;color:var(--text-muted)">'+pd.desc+'</div></div>'
+      +'<div style="font-size:15px;font-weight:700;color:'+(done?'var(--green)':'var(--gold)')+'">'+txt+'</div>'
+      +'</div>';
+  });
+  cdHtml+='</div>';
+  el.innerHTML+=cdHtml;
+};
+
+// ── OVERRIDE refreshCurrent to include new tabs ───────────
+var _prev_refreshCurrent=refreshCurrent;
+refreshCurrent=function(){
+  if(currentTab==='leaderboard'){var f=typeof renderLeaderboard2==='function'?renderLeaderboard2:renderLeaderboard;f();checkLeaderChange();}
+  else if(currentTab==='scores'){var f2=typeof renderScores2==='function'?renderScores2:renderScores;f2();}
+  else if(currentTab==='groups')renderGroups();
+  else if(currentTab==='prizes')renderPrizes();
+  else if(currentTab==='bracket')renderBracket();
+  else if(currentTab==='myteams')renderMyTeams();
+  else if(currentTab==='admin')renderAdmin();
+};
+
+// ── OVERRIDE showTab for new tabs ─────────────────────────
+showTab=function(tab,btn){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  btn.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
+  var tabEl=document.getElementById('tab-'+tab);
+  if(tabEl)tabEl.classList.add('active');
+  currentTab=tab;refreshCurrent();
+};
+
+// Init prevLeader from current standings
+var _initLb=computeLeaderboard();
+if(_initLb.length)prevLeader=_initLb[0].name;
+
+// ============================================================
+// ANIMATIONS, POLISH & NEW FEATURES
+// ============================================================
+
+// ── DARK/LIGHT MODE TOGGLE ───────────────────────────────
+var darkMode = localStorage.getItem('wc26_dark') !== 'false';
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+  var btn = document.getElementById('theme-toggle');
+  if(btn) btn.textContent = darkMode ? '\u2600\ufe0f' : '\ud83c\udf19';
+}
+function toggleTheme(){
+  darkMode = !darkMode;
+  localStorage.setItem('wc26_dark', darkMode);
+  applyTheme();
+}
+applyTheme();
+
+// ── HAPTIC FEEDBACK ──────────────────────────────────────
+function haptic(){
+  if(navigator.vibrate) navigator.vibrate(8);
+}
+
+// ── GOAL SOUND (optional ping) ───────────────────────────
+var soundEnabled = localStorage.getItem('wc26_sound') === 'true';
+function toggleSound(){
+  soundEnabled = !soundEnabled;
+  localStorage.setItem('wc26_sound', soundEnabled);
+  var btn = document.getElementById('sound-toggle');
+  if(btn) btn.textContent = soundEnabled ? '\ud83d\udd14' : '\ud83d\udd15';
+}
+function playGoalSound(){
+  if(!soundEnabled) return;
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(440, ctx.currentTime+0.3);
+    g.gain.setValueAtTime(0.3, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.4);
+    o.start(); o.stop(ctx.currentTime+0.4);
+  } catch(e){}
+}
+
+// ── CONFETTI ─────────────────────────────────────────────
+function fireConfetti(){
+  var colors=['#c9a84c','#3fb950','#58a6ff','#f85149','#ffffff'];
+  for(var i=0;i<80;i++){
+    (function(){
+      var el=document.createElement('div');
+      el.className='confetti-piece';
+      el.style.left=Math.random()*100+'vw';
+      el.style.background=colors[Math.floor(Math.random()*colors.length)];
+      el.style.animationDuration=(Math.random()*1.5+1)+'s';
+      el.style.animationDelay=(Math.random()*0.5)+'s';
+      el.style.width=el.style.height=(Math.random()*8+4)+'px';
+      el.style.borderRadius=Math.random()>0.5?'50%':'2px';
+      document.body.appendChild(el);
+      setTimeout(function(){if(el.parentNode)el.remove();},2500);
+    })();
+  }
+}
+
+var _confettiFired = false;
+function checkConfetti(){
+  var lb=computeLeaderboard();
+  if(!lb.length)return;
+  if(myTeamName&&lb[0].name.toLowerCase()===myTeamName.toLowerCase()&&!_confettiFired){
+    fireConfetti();
+    _confettiFired=true;
+  }
+}
+
+// ── NUMBER COUNT-UP ──────────────────────────────────────
+function countUp(el, target, duration){
+  var start=0, step=target/((duration||600)/16);
+  var timer=setInterval(function(){
+    start+=step;
+    if(start>=target){start=target;clearInterval(timer);}
+    el.textContent='\u00a3'+Math.round(start);
+  },16);
+}
+
+// ── SKELETON LOADER ──────────────────────────────────────
+function showSkeleton(){
+  var el=document.getElementById('tab-leaderboard');
+  if(!el||el.innerHTML.trim())return;
+  var rows='';
+  for(var i=0;i<8;i++){
+    rows+='<div class="skel-row"><div class="skel-pos"></div><div class="skel-main"><div class="skel-name"></div><div class="skel-chips"></div></div><div class="skel-pts"></div></div>';
+  }
+  el.innerHTML='<div class="skel-wrap">'+rows+'</div>';
+}
+
+// ── LEADERBOARD SEARCH ───────────────────────────────────
+var lbSearch='';
+function setLbSearch(val){
+  lbSearch=val.toLowerCase();
+  renderLeaderboard();
+}
+
+// ── STAGGERED ROW ANIMATION ──────────────────────────────
+function animateRows(container){
+  var rows=container.querySelectorAll('.lb-row');
+  rows.forEach(function(row,i){
+    row.style.opacity='0';
+    row.style.transform='translateY(10px)';
+    setTimeout(function(){
+      row.style.transition='opacity 0.25s ease, transform 0.25s ease';
+      row.style.opacity='1';
+      row.style.transform='translateY(0)';
+    }, i*35);
+  });
+}
+
+// ── SCORE FLASH ──────────────────────────────────────────
+var prevScores={};
+function checkScoreChanges(){
+  var changed=false;
+  matches.forEach(function(m){
+    var key=m.id;
+    var prev=prevScores[key];
+    var curr=(m.home_goals||0)+'-'+(m.away_goals||0);
+    if(prev&&prev!==curr){
+      changed=true;
+      playGoalSound();
+      flashLeaderboardRows();
+    }
+    prevScores[key]=curr;
+  });
+}
+function flashLeaderboardRows(){
+  document.querySelectorAll('.lb-row').forEach(function(row){
+    row.classList.add('score-flash');
+    setTimeout(function(){row.classList.remove('score-flash');},800);
+  });
+}
+
+// ── TAB FADE TRANSITION ──────────────────────────────────
+showTab=function(tab,btn){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  btn.classList.add('active');
+  var current=document.querySelector('.tab-content.active');
+  if(current){
+    current.style.opacity='0';
+    setTimeout(function(){
+      document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');t.style.opacity='';});
+      var next=document.getElementById('tab-'+tab);
+      if(next){next.classList.add('active');next.style.opacity='0';setTimeout(function(){next.style.transition='opacity 0.2s';next.style.opacity='1';setTimeout(function(){next.style.transition='';},200);},10);}
+      currentTab=tab;refreshCurrent();
+    },120);
+  } else {
+    document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
+    var next=document.getElementById('tab-'+tab);
+    if(next)next.classList.add('active');
+    currentTab=tab;refreshCurrent();
+  }
+};
+
+// ── OVERRIDE stepScore FOR HAPTIC ────────────────────────
+var _orig_stepScore=stepScore;
+stepScore=function(id,side,delta){
+  haptic();
+  _orig_stepScore(id,side,delta);
+};
+
+// ── SHARE MY POSITION ────────────────────────────────────
+function shareMyPosition(){
+  var lb=computeLeaderboard();
+  if(!myTeamName){showToast('Set your name in My Teams first','error');return;}
+  var me=lb.find(function(e){return e.name.toLowerCase()===myTeamName.toLowerCase();});
+  if(!me){showToast('Name not found','error');return;}
+  var rank=lb.indexOf(me)+1;
+  var suffix=rank===1?'st':rank===2?'nd':rank===3?'rd':'th';
+  var msg='\u26bd WC2026 Sweepstake - I\'m '+rank+suffix+'!\n\n'
+    +me.name+' \u2013 '+me.total+' pts\n'
+    +'\ud83d\udfe2 '+me.team+' ('+me.t1pts+' pts)\n'
+    +'\ud83d\udd34 '+me.team2+' ('+me.t2pts+' pts)\n\n'
+    +'Full leaderboard: https://k1ran555.github.io/wc2026-sweepstake/';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+// ── PATCH renderMyTeams to add share button ───────────────
+var _orig_renderMyTeams=renderMyTeams;
+renderMyTeams=function(){
+  _orig_renderMyTeams();
+  var el=document.getElementById('tab-myteams');
+  if(myTeamName){
+    var lb=computeLeaderboard();
+    var me=lb.find(function(e){return e.name.toLowerCase()===myTeamName.toLowerCase();});
+    if(me){
+      var shareBtn='<button class="btn-whatsapp" style="margin-top:12px;width:100%" onclick="shareMyPosition()">'
+        +'<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:5px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.122 1.528 5.856L.057 23.882l6.188-1.448A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.86 0-3.604-.504-5.102-1.382l-.366-.217-3.793.888.904-3.7-.238-.38A9.946 9.946 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>'
+        +'Share my position</button>';
+      el.innerHTML+=shareBtn;
+    }
+  }
+};
+
+// ── PATCH renderLeaderboard FOR SEARCH + ANIMATIONS ──────
+var _orig_renderLeaderboard=renderLeaderboard;
+renderLeaderboard=function(){
+  _orig_renderLeaderboard();
+  var el=document.getElementById('tab-leaderboard');
+  // Inject search bar at top
+  var searchBar='<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center">'
+    +'<input type="text" placeholder="\ud83d\udd0d Search players..." oninput="setLbSearch(this.value)" value="'+esc(lbSearch)+'" '
+    +'style="flex:1;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:13px;background:var(--surface-2);color:var(--text)">'
+    +(lbSearch?'<button class="btn" onclick="clearLbSearch()">Clear</button>':'')
+    +'</div>';
+  // Filter rows if searching
+  if(lbSearch){
+    var rows=el.querySelectorAll('.lb-row');
+    rows.forEach(function(row){
+      var name=row.querySelector('.lb-name');
+      if(name&&name.textContent.toLowerCase().indexOf(lbSearch)===-1){
+        row.style.display='none';
+      }
+    });
+  }
+  el.innerHTML=searchBar+el.innerHTML;
+  // Animate rows
+  var card=el.querySelector('.card');
+  if(card)animateRows(card);
+  // Count-up pot
+  var potEl=document.getElementById('pot-amount');
+  if(potEl&&!potEl._animated){
+    potEl._animated=true;
+    countUp(potEl,pot(),800);
+  }
+  checkConfetti();
+};
+
+// ── OVERRIDE refreshCurrent TO INCLUDE CHECKS ────────────
+refreshCurrent=function(){
+  checkScoreChanges();
+  if(currentTab==='leaderboard'){var f=typeof renderLeaderboard2==='function'?renderLeaderboard2:renderLeaderboard;f();checkLeaderChange();}
+  else if(currentTab==='scores'){var f2=typeof renderScores2==='function'?renderScores2:renderScores;f2();}
+  else if(currentTab==='groups')renderGroups();
+  else if(currentTab==='prizes')renderPrizes();
+  else if(currentTab==='bracket')renderBracket();
+  else if(currentTab==='myteams')renderMyTeams();
+  else if(currentTab==='admin')renderAdmin();
+};
+
+// ── INJECT THEME + SOUND TOGGLES INTO HEADER ─────────────
+(function(){
+  var badges=document.querySelector('.status-badges');
+  if(badges){
+    var themeBtn=document.createElement('button');
+    themeBtn.id='theme-toggle';
+    themeBtn.className='refresh-btn';
+    themeBtn.title='Toggle dark/light mode';
+    themeBtn.textContent=darkMode?'\u2600\ufe0f':'\ud83c\udf19';
+    themeBtn.onclick=toggleTheme;
+    var soundBtn=document.createElement('button');
+    soundBtn.id='sound-toggle';
+    soundBtn.className='refresh-btn';
+    soundBtn.title='Toggle goal sound';
+    soundBtn.textContent=soundEnabled?'\ud83d\udd14':'\ud83d\udd15';
+    soundBtn.onclick=toggleSound;
+    badges.insertBefore(soundBtn,badges.firstChild);
+    badges.insertBefore(themeBtn,badges.firstChild);
+  }
+})();
+
+// Init score snapshot
+matches.forEach(function(m){prevScores[m.id]=(m.home_goals||0)+'-'+(m.away_goals||0);});
+
+// Show skeleton on first load
+showSkeleton();
+
+// ============================================================
+// EDGE CASE FIXES & MINOR UX
+// ============================================================
+
+// ── FIX 1: Worst GD only applies once games have been played ─
+// Override computeWorstGD to return null if no games played yet
+var _orig_computeWorstGD = computeWorstGD;
+computeWorstGD = function(){
+  var played = matches.filter(function(m){
+    return m.home_goals !== null && m.away_goals !== null;
+  }).length;
+  if(played === 0) return null; // no games played, no worst GD yet
+  var lb = computeLeaderboard();
+  if(!lb.length) return null;
+  // Only consider people whose teams have actually played
+  var withGames = lb.filter(function(e){ return e.gf > 0 || e.ga > 0 || e.gd < 0; });
+  if(!withGames.length) return null;
+  return withGames.slice().sort(function(a,b){
+    if(a.gd !== b.gd) return a.gd - b.gd;
+    return b.ga - a.ga;
+  })[0];
+};
+
+// ── FIX 2: Clear lbSearch when switching away from leaderboard ─
+var _fix_showTab = showTab;
+showTab = function(tab, btn){
+  if(tab !== 'leaderboard') lbSearch = '';
+  _fix_showTab(tab, btn);
+};
+
+// ── FIX 3: Count-up should only fire on initial load, not re-renders ─
+// Reset _animated flag on full data reload so it plays once per session
+var _potAnimated = false;
+var _fix_loadAll = loadAll;
+loadAll = function(){
+  return _fix_loadAll().then(function(){
+    // Only reset animation on first successful load
+    if(!_potAnimated){
+      var potEl = document.getElementById('pot-amount');
+      if(potEl) potEl._animated = false;
+    }
+  });
+};
+
+// ── FIX 4: Prevent negative/invalid direct keyboard input on score steppers ─
+// Patch scoreRow to add min=0 and oninput sanitisation — applied via event delegation
+document.addEventListener('input', function(e){
+  var el = e.target;
+  if(el && el.classList && el.classList.contains('step-val-input')){
+    var val = parseInt(el.value);
+    if(isNaN(val) || val < 0) el.value = 0;
+    if(val > 99) el.value = 99;
+  }
+});
+
+// ── FIX 5: Guard against duplicate names in leaderboard ─
+// If two participants have same name, append slot number to distinguish
+var _orig_computeLb = computeLeaderboard;
+computeLeaderboard = function(){
+  var result = _orig_computeLb();
+  var seen = {};
+  result.forEach(function(e){
+    var key = e.name.toLowerCase();
+    seen[key] = (seen[key] || 0) + 1;
+  });
+  var counts = {};
+  result.forEach(function(e){
+    var key = e.name.toLowerCase();
+    if(seen[key] > 1){
+      counts[key] = (counts[key] || 0) + 1;
+      e.name = e.name + ' (' + counts[key] + ')';
+    }
+  });
+  return result;
+};
+
+// ── FIX 6: Nav tab overflow on small screens ─
+// Done via CSS (see style.css append) - JS just ensures active tab scrolls into view
+var _fix2_showTab = showTab;
+showTab = function(tab, btn){
+  _fix2_showTab(tab, btn);
+  if(btn && btn.scrollIntoView){
+    setTimeout(function(){ btn.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'}); }, 50);
+  }
+};
+
+// ── FIX 7: Clear search input value when Clear is clicked ─
+function clearLbSearch(){
+  lbSearch = '';
+  var input = document.querySelector('input[placeholder*="Search"]');
+  if(input) input.value = '';
+  renderLeaderboard();
+}
+
+// ── FIX 8: Prize pot count-up only on first page load ─
+var _firstLoad = true;
+var _orig_renderLb_final = renderLeaderboard;
+renderLeaderboard = function(){
+  _orig_renderLb_final();
+  if(_firstLoad){
+    _firstLoad = false;
+    var potEl = document.getElementById('pot-amount');
+    if(potEl && !_potAnimated){
+      _potAnimated = true;
+      countUp(potEl, pot(), 900);
+    }
+  } else {
+    // Just set value directly on re-renders
+    var potEl2 = document.getElementById('pot-amount');
+    if(potEl2 && _potAnimated) potEl2.textContent = '\u00a3' + Math.round(pot());
+  }
+};
