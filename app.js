@@ -2014,3 +2014,265 @@ matchCard = function(m, type){
     + buildPreviewPanel(m)
     +'</div>';
 };
+
+// ============================================================
+// RIVALRY ALERT, WHO DO I BEAT, SHOCK RESULT, BOTTOMING OUT,
+// PREDICTION LOCK, BEST PREDICTION BADGE
+// ============================================================
+
+// ── STRONG/WEAK TIER DEFINITION ──────────────────────────
+var STRONG_TEAMS = ['France','Spain','Argentina','England','Portugal','Brazil',
+  'Netherlands','Morocco','Belgium','Germany','Uruguay','Colombia',
+  'USA','Japan','Senegal','Croatia','Switzerland','Ecuador',
+  'Australia','South Korea','Mexico','Norway','Algeria','Sweden'];
+
+function isUpset(homeTeam, awayTeam, homeGoals, awayGoals){
+  var homeStrong = STRONG_TEAMS.indexOf(homeTeam) !== -1;
+  var awayStrong = STRONG_TEAMS.indexOf(awayTeam) !== -1;
+  if(homeStrong && !awayStrong && awayGoals > homeGoals) return {winner:awayTeam,loser:homeTeam};
+  if(!homeStrong && awayStrong && homeGoals > awayGoals) return {winner:homeTeam,loser:awayTeam};
+  return null;
+}
+
+// ── RIVALRY ALERT ─────────────────────────────────────────
+function getRivalryMatches(){
+  return matches.filter(function(m){
+    var phase = getMatchPhase(m);
+    if(phase !== 'upcoming' && phase !== 'live') return false;
+    var ho = ownerOfTeam(m.home), ao = ownerOfTeam(m.away);
+    return ho && ao && ho !== ao; // two different participants own these teams
+  });
+}
+
+// ── SHOCK RESULT DETECTOR ────────────────────────────────
+var shownUpsets = {};
+function checkUpsets(){
+  matches.forEach(function(m){
+    if(m.home_goals === null || m.away_goals === null) return;
+    if(shownUpsets[m.id]) return;
+    var phase = getMatchPhase(m);
+    if(phase !== 'finished') return;
+    var upset = isUpset(m.home, m.away, m.home_goals, m.away_goals);
+    if(!upset) return;
+    shownUpsets[m.id] = true;
+    showUpsetBanner(upset.winner, upset.loser, m.home_goals, m.away_goals, m.home, m.away);
+  });
+}
+
+function showUpsetBanner(winner, loser, hg, ag, home, away){
+  var owner = ownerOfTeam(winner);
+  var el = document.getElementById('upset-banner');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'upset-banner';
+    el.className = 'upset-banner';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '\ud83d\udea8 SHOCK RESULT! <strong>'+esc(winner)+'</strong> beat '
+    +esc(loser)+' ('+hg+'\u2013'+ag+')'
+    +(owner?' \u2014 \ud83d\udc64 '+esc(owner):'');
+  el.classList.add('show');
+  setTimeout(function(){el.classList.remove('show');}, 7000);
+}
+
+// ── BOTTOMING OUT TRACKER ────────────────────────────────
+function getBottomingOut(){
+  var tables = computeGroupTables();
+  var result = [];
+  Object.keys(GROUPS).forEach(function(g){
+    var sorted = GROUPS[g].slice().sort(function(a,b){
+      var ta=tables[g][a],tb=tables[g][b];
+      return(tb.pts-ta.pts)||((tb.gf-tb.ga)-(ta.gf-ta.ga))||(tb.gf-ta.gf);
+    });
+    var last = sorted[sorted.length-1];
+    var s = tables[g][last];
+    if(s.p > 0){
+      var owner = ownerOfTeam(last);
+      result.push({team:last, group:g, owner:owner, pts:s.pts, gd:s.gf-s.ga, gf:s.gf, ga:s.ga});
+    }
+  });
+  return result.sort(function(a,b){
+    if(a.pts !== b.pts) return a.pts - b.pts;
+    return (a.gd) - (b.gd);
+  });
+}
+
+// ── BEST PREDICTION BADGE ────────────────────────────────
+function getBestPredictor(){
+  var board = computePredictionLeaderboard();
+  if(!board.length || board[0].played === 0) return null;
+  return board[0];
+}
+
+// ── WHO DO I NEED TO BEAT ────────────────────────────────
+function getWhoToBeat(){
+  if(!myTeamName) return null;
+  var lb = computeLeaderboard();
+  var myIdx = -1;
+  lb.forEach(function(e,i){
+    if(e.name.toLowerCase() === myTeamName.toLowerCase()) myIdx = i;
+  });
+  if(myIdx <= 0) return null; // already 1st or not found
+  var me = lb[myIdx];
+  var targets = lb.slice(Math.max(0, myIdx-3), myIdx);
+  return {me:me, targets:targets, myRank:myIdx+1};
+}
+
+// ── PATCH renderScores2 TO ADD RIVALRY + UPSET ALERTS ────
+var _prev_renderScores2 = typeof renderScores2 === 'function' ? renderScores2 : renderScores;
+renderScores2 = function(){
+  _prev_renderScores2();
+  var el = document.getElementById('tab-scores');
+  if(!el) return;
+
+  // Derby fixtures banner
+  var rivalries = getRivalryMatches();
+  if(rivalries.length){
+    var derbyHtml = '<div class="derby-banner">';
+    rivalries.forEach(function(m){
+      var ho = ownerOfTeam(m.home), ao = ownerOfTeam(m.away);
+      var phase = getMatchPhase(m);
+      var liveTag = phase==='live' ? ' \u25cf LIVE' : '';
+      derbyHtml += '\u2694\ufe0f <strong>'+esc(ho)+'</strong> vs <strong>'+esc(ao)+'</strong>'
+        +' \u2014 '+esc(m.home)+' vs '+esc(m.away)
+        +' \u00b7 '+m.match_date+' '+m.match_time+liveTag+'<br>';
+    });
+    derbyHtml += '</div>';
+    el.innerHTML = derbyHtml + el.innerHTML;
+  }
+
+  // Check for upsets
+  checkUpsets();
+};
+
+// ── PATCH renderLeaderboard2 TO ADD BEST PREDICTOR BADGE AND WHO TO BEAT ──
+var _prev_renderLeaderboard2 = typeof renderLeaderboard2 === 'function' ? renderLeaderboard2 : renderLeaderboard;
+renderLeaderboard2 = function(){
+  _prev_renderLeaderboard2();
+  var el = document.getElementById('tab-leaderboard');
+  if(!el) return;
+
+  // Best predictor badge — inject into leaderboard rows
+  var bestPred = getBestPredictor();
+  if(bestPred){
+    var rows = el.querySelectorAll('.lb-row');
+    rows.forEach(function(row){
+      var nameEl = row.querySelector('.lb-name');
+      if(nameEl && nameEl.textContent.toLowerCase().indexOf(bestPred.name.toLowerCase()) !== -1){
+        nameEl.innerHTML += ' <span class="best-pred-badge">\ud83c\udfaf Best predictor</span>';
+      }
+    });
+  }
+
+  // Who do I need to beat — add after standings
+  var wtb = getWhoToBeat();
+  if(wtb){
+    var card = document.createElement('div');
+    card.innerHTML = '<div class="section-label" style="margin-top:1.5rem">Who you need to beat</div>'
+      +'<div class="card">';
+    wtb.targets.slice().reverse().forEach(function(target, i){
+      var gap = target.total - wtb.me.total;
+      card.innerHTML += '<div class="lb-row">'
+        +'<span class="lb-pos" style="font-size:11px;color:var(--text-muted)">'+(wtb.myRank-wtb.targets.length+i)+'</span>'
+        +'<div class="lb-main">'
+        +'<div class="lb-top-row">'
+        +'<span class="lb-name">'+esc(target.name)+'</span>'
+        +'<span style="font-size:12px;color:var(--red)">+'+gap+' pts ahead</span>'
+        +'</div>'
+        +'<div class="lb-teams-row">'
+        +'<span class="lb-team-chip strong"><span class="chip-dot green-dot"></span>'+esc(target.team)+' <span class="chip-pts">'+target.t1pts+'</span></span>'
+        +'<span class="lb-plus">+</span>'
+        +'<span class="lb-team-chip weak"><span class="chip-dot red-dot"></span>'+esc(target.team2)+' <span class="chip-pts">'+target.t2pts+'</span></span>'
+        +'</div></div></div>';
+    });
+    card.innerHTML += '</div>';
+    el.appendChild(card);
+  }
+};
+
+// ── PATCH renderMyTeams TO ADD BOTTOMING OUT ─────────────
+var _prev_renderMyTeams = typeof renderMyTeams === 'function' ? renderMyTeams : function(){};
+renderMyTeams = function(){
+  _prev_renderMyTeams();
+  var el = document.getElementById('tab-myteams');
+  if(!el) return;
+
+  var bottoming = getBottomingOut();
+  if(!bottoming.length) return;
+
+  var html = '<div class="section-label" style="margin-top:1.5rem">Bottoming out \ud83d\udfe1</div>'
+    +'<div class="alert warning" style="margin-bottom:10px;font-size:12px">Teams currently bottom of their group — worst GD prize contenders</div>'
+    +'<div class="card">';
+  bottoming.forEach(function(b, i){
+    html += '<div class="lb-row">'
+      +'<span class="lb-pos" style="font-size:15px">'+(i===0?'\ud83e\udd47':'')+'</span>'
+      +'<div class="lb-main"><div class="lb-top-row">'
+      +'<span class="lb-name">'+esc(b.team)+' <span style="font-size:11px;color:var(--text-muted)">Grp '+b.group+'</span></span>'
+      +'<span style="font-size:13px;font-weight:600;color:var(--red)">'+b.pts+' pts</span>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--text-muted)">GD: '+(b.gd>0?'+':'')+b.gd+' \u00b7 '+(b.owner?'\ud83d\udc64 '+esc(b.owner):'No owner')+'</div>'
+      +'</div></div>';
+  });
+  html += '</div>';
+  el.innerHTML += html;
+};
+
+// ── PREDICTION LOCK — grey out inputs for kicked-off games ─
+var _prev_renderPredictions = renderPredictions;
+renderPredictions = function(){
+  _prev_renderPredictions();
+  // Lock inputs for games that have started
+  document.querySelectorAll('.pred-row').forEach(function(row){
+    // Already handled in buildPredRow by checking phase
+  });
+};
+
+// Override pred row to lock if game has started — patch changePred
+var _orig_changePred = changePred;
+changePred = function(matchId, side, delta){
+  var m = matches.find(function(x){return x.id===matchId;});
+  if(m && getMatchPhase(m) !== 'upcoming'){
+    showToast('Predictions are locked once a game starts','error');
+    return;
+  }
+  _orig_changePred(matchId, side, delta);
+};
+
+var _orig_submitPred = submitPred;
+submitPred = function(matchId){
+  var m = matches.find(function(x){return x.id===matchId;});
+  if(m && getMatchPhase(m) !== 'upcoming'){
+    showToast('Predictions locked \u2014 game has started','error');
+    return;
+  }
+  _orig_submitPred(matchId);
+};
+
+// Same for preview predictions
+var _orig_submitPrevPred = submitPrevPred;
+submitPrevPred = function(id){
+  var m = matches.find(function(x){return x.id===id;});
+  if(m && getMatchPhase(m) !== 'upcoming'){
+    showToast('Predictions locked \u2014 game has started','error');
+    return;
+  }
+  _orig_submitPrevPred(id);
+};
+
+// ── OVERRIDE refreshCurrent FINAL ────────────────────────
+refreshCurrent = function(){
+  typeof checkScoreChanges === 'function' && checkScoreChanges();
+  typeof checkUpsets === 'function' && checkUpsets();
+  if(currentTab==='leaderboard'){
+    var f = typeof renderLeaderboard2==='function' ? renderLeaderboard2 : renderLeaderboard;
+    f();
+    typeof checkLeaderChange==='function' && checkLeaderChange();
+  }
+  else if(currentTab==='scores'){var f2=typeof renderScores2==='function'?renderScores2:renderScores;f2();}
+  else if(currentTab==='groups') renderGroups();
+  else if(currentTab==='prizes') renderPrizes();
+  else if(currentTab==='bracket') renderBracket();
+  else if(currentTab==='myteams') renderMyTeams();
+  else if(currentTab==='predictions') renderPredictions();
+  else if(currentTab==='admin') renderAdmin();
+};
