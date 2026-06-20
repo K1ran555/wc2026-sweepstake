@@ -939,3 +939,73 @@ input[type="number"]:focus, input[type="text"]:focus, input[type="password"]:foc
   font-size: 11px; color: var(--text-muted);
   display: flex; align-items: center; gap: 4px;
 }
+
+/* ── LIVE HEADER BANNER ── */
+.live-header-banner {
+  background: #0d2b1a;
+  border-bottom: 1px solid var(--green-border);
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 16px;
+  text-align: center;
+  position: sticky;
+  top: 62px;
+  z-index: 98;
+  animation: live-pulse 2s ease-in-out infinite;
+  white-space: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.live-header-banner strong { color: white; font-size: 15px; }
+
+/* ── DAY RESULTS CARD ── */
+.day-results-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.day-results-header {
+  background: var(--navy-light);
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.day-result-row {
+  display: grid;
+  grid-template-columns: 1fr 70px 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 0.5px solid var(--border-light);
+  font-size: 13px;
+}
+.day-result-row:last-child { border-bottom: none; }
+.day-result-home {
+  color: var(--text);
+  font-weight: 500;
+  text-align: right;
+}
+.day-result-score {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gold);
+  text-align: center;
+  white-space: nowrap;
+}
+.day-result-away {
+  color: var(--text);
+  font-weight: 500;
+  text-align: left;
+}
+.day-owner {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+}

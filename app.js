@@ -37,6 +37,7 @@ var adminUnlocked = false;
 var saveTimers = {};
 var adminSubTab = 'scores';
 var scoreSubTab = 'upcoming';
+var scoresTab = 'upcoming';
 var prevLbOrder = []; // for movement arrows
 var myTeamName = localStorage.getItem('wc26_myname') || '';
 
@@ -389,7 +390,7 @@ function renderPrizes(){
     +'<div class="metric"><div class="metric-label">Total pot</div><div class="metric-value">'+fmt(p)+'</div></div>'
     +'<div class="metric"><div class="metric-label">Entry fee</div><div class="metric-value">\u00a35</div></div>'
     +'<div class="metric"><div class="metric-label">Paid in</div><div class="metric-value">'+namedCount()+'</div></div>'
-    +'<div class="metric"><div class="metric-label">Remaining</div><div class="metric-value">'+(28-namedCount())+'</div></div>'
+    
     +'</div>'
     +'<div class="section-label">Prize breakdown</div><div class="card prizes-breakdown">';
   PRIZE_SPLITS.forEach(function(sp,i){
@@ -537,14 +538,14 @@ function renderAdmin(){
 
   // ── PARTICIPANTS SUB-TAB ──
   if(adminSubTab==='participants'){
-    var pct=Math.round((nc/28)*100);
+    
     html+='<div class="card" style="margin-bottom:16px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       +'<span class="section-label" style="margin:0">Participants \u2014 '+nc+'/28</span>'
       +'<span style="font-size:13px;font-weight:600;color:var(--gold)">'+fmt(pot())+' pot</span>'
       +'</div>'
-      +'<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>'
-      +'<div class="progress-label" style="margin-bottom:12px">'+nc+' of 28 \u00b7 '+(28-nc)+' spots left</div>'
+      
+      
       +'<div class="participants-grid" id="participants-grid">';
     participants.forEach(function(p){
       html+='<div class="participant-row '+(p.name?'filled':'')+'" id="prow-'+p.slot+'" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px">'
@@ -784,19 +785,70 @@ function renderLeaderboard2(){
 
 // ── ENHANCED SCORES WITH COUNTDOWN ───────────────────────
 function renderScores2(){
-  renderScores();
   var el=document.getElementById('tab-scores');
-  var next=getNextFixture();
+  if(!matches.length){el.innerHTML='<div class="empty"><div class="empty-icon">⚽</div>No fixtures loaded</div>';return;}
+  var withPhase=matches.map(function(m){return{m:m,phase:getMatchPhase(m),kickoff:parseMatchDateTime(m)};});
+  var live=withPhase.filter(function(x){return x.phase==='live';}).map(function(x){return x.m;});
+  var finished=withPhase.filter(function(x){return x.phase==='finished';})
+    .sort(function(a,b){var ka=a.kickoff?a.kickoff.getTime():0,kb=b.kickoff?b.kickoff.getTime():0;return kb-ka;})
+    .map(function(x){return x.m;});
+  var upcoming=withPhase.filter(function(x){return x.phase==='upcoming';})
+    .sort(function(a,b){var ka=a.kickoff?a.kickoff.getTime():Infinity,kb=b.kickoff?b.kickoff.getTime():Infinity;return ka-kb;})
+    .map(function(x){return x.m;});
+  // Auto-start: live games with null scores default to 0-0
+  live.forEach(function(m){
+    if(m.home_goals===null||m.away_goals===null){
+      m.home_goals=0;m.away_goals=0;
+      sbPatch('matches',{id:m.id},{home_goals:0,away_goals:0}).catch(function(){});
+    }
+  });
+  // Countdown bar
+  var next=upcoming[0];
+  var countdownBar='';
   if(next){
     var timeStr=next.match_date+(next.match_time?' '+next.match_time+' BST':'');
-    var bar='<div class="countdown-bar">'
-      +'<span class="countdown-label">\u23f1 Next: '+esc(next.home)+' vs '+esc(next.away)+'</span>'
+    countdownBar='<div class="countdown-bar">'
+      +'<span class="countdown-label">⏱ Next: '+esc(next.home)+' vs '+esc(next.away)+'</span>'
       +'<span id="countdown-display" class="countdown-time">'+getCountdownText()+'</span>'
       +'<span class="countdown-when">'+timeStr+'</span>'
       +'</div>';
-    el.innerHTML=bar+el.innerHTML;
   }
+  var tabBar='<div class="admin-subtabs" style="margin-bottom:14px">'
+    +'<button class="admin-subtab'+(scoresTab==='upcoming'?' active':'')+" onclick=\"switchScoresTab('upcoming')\">Upcoming</button>"
+    +'<button class="admin-subtab'+(scoresTab==='completed'?' active':'')+" onclick=\"switchScoresTab('completed')\">Completed</button>"
+    +'</div>';
+  var html=countdownBar+tabBar;
+  if(scoresTab==='upcoming'){
+    if(live.length){html+='<div class="section-label">Live now</div>';live.forEach(function(m){html+=matchCard(m,'live');});html+='<div style="margin-top:14px"></div>';}
+    if(upcoming.length){html+='<div class="section-label">Upcoming</div>';upcoming.forEach(function(m){html+=matchCard(m,'ns');});}
+    if(!live.length&&!upcoming.length)html+='<div class="empty">No upcoming fixtures</div>';
+  } else {
+    if(finished.length){
+      // Group by date
+      var byDay={};var dayOrder=[];
+      finished.forEach(function(m){
+        var key=m.match_date||'Unknown';
+        if(!byDay[key]){byDay[key]=[];dayOrder.push(key);}
+        byDay[key].push(m);
+      });
+      dayOrder.forEach(function(day){
+        html+='<div class="day-results-card">'
+          +'<div class="day-results-header">'+day+'</div>';
+        byDay[day].forEach(function(m){
+          var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
+          html+='<div class="day-result-row">'
+            +'<span class="day-result-home">'+esc(m.home)+(ho?' <span class="day-owner">('+esc(ho)+')</span>':'')+'</span>'
+            +'<span class="day-result-score">'+m.home_goals+' – '+m.away_goals+'</span>'
+            +'<span class="day-result-away">'+(ao?'<span class="day-owner">('+esc(ao)+')</span> ':'')+esc(m.away)+'</span>'
+            +'</div>';
+        });
+        html+='</div>';
+      });
+    } else html+='<div class="empty">No completed matches yet</div>';
+  }
+  el.innerHTML=html;
 }
+function switchScoresTab(sub){scoresTab=sub;renderScores2();}
 
 // ── PATCH saveScoreDirect for error toast ────────────────
 var _orig_saveScoreDirect=saveScoreDirect;
@@ -2276,3 +2328,68 @@ refreshCurrent = function(){
   else if(currentTab==='predictions') renderPredictions();
   else if(currentTab==='admin') renderAdmin();
 };
+
+// ============================================================
+// LIVE MATCH HEADER BANNER + RIVALRY FIX
+// ============================================================
+
+// ── LIVE BANNER IN HEADER ─────────────────────────────────
+function updateLiveBanner(){
+  var liveMatches = matches.filter(function(m){return getMatchPhase(m)==='live';});
+  var banner = document.getElementById('live-header-banner');
+  if(!liveMatches.length){
+    if(banner) banner.style.display='none';
+    return;
+  }
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'live-header-banner';
+    banner.className = 'live-header-banner';
+    // Insert right after header
+    var header = document.querySelector('header');
+    if(header && header.nextSibling){
+      header.parentNode.insertBefore(banner, header.nextSibling);
+    } else if(header){
+      header.parentNode.appendChild(banner);
+    }
+  }
+  banner.style.display = 'block';
+  var parts = liveMatches.map(function(m){
+    var hg = m.home_goals !== null ? m.home_goals : 0;
+    var ag = m.away_goals !== null ? m.away_goals : 0;
+    return '\u25cf ' + esc(m.home) + ' <strong>' + hg + '\u2013' + ag + '</strong> ' + esc(m.away);
+  });
+  banner.innerHTML = parts.join(' &nbsp;&nbsp; ');
+}
+
+// ── FIX RIVALRY DETECTION ────────────────────────────────
+// Override getRivalryMatches to work correctly
+getRivalryMatches = function(){
+  return matches.filter(function(m){
+    var phase = getMatchPhase(m);
+    // Show upcoming AND live derbies
+    if(phase !== 'upcoming' && phase !== 'live') return false;
+    var ho = ownerOfTeam(m.home);
+    var ao = ownerOfTeam(m.away);
+    // Both teams must be owned by different participants
+    return ho && ao && ho.toLowerCase() !== ao.toLowerCase();
+  });
+};
+
+// ── PATCH loadAll TO UPDATE BANNER ───────────────────────
+var _liveBanner_orig_loadAll = loadAll;
+loadAll = function(){
+  return _liveBanner_orig_loadAll().then(function(){
+    updateLiveBanner();
+  });
+};
+
+// ── PATCH refreshCurrent TO UPDATE BANNER ────────────────
+var _liveBanner_orig_refresh = refreshCurrent;
+refreshCurrent = function(){
+  updateLiveBanner();
+  _liveBanner_orig_refresh();
+};
+
+// Run immediately
+updateLiveBanner();
