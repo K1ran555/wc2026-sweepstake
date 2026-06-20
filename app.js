@@ -433,17 +433,9 @@ function scoreRow(m){
     +'<span id="score-ind-'+m.id+'" class="ser-tick">\u2713</span>'
     +'</div>'
     +'<div class="ser-bottom">'
-    +'<div class="score-stepper">'
-    +'<button class="step-btn" onclick="stepScore('+m.id+',\'home\',-1)">-</button>'
-    +'<span class="step-val" id="sv-home-'+m.id+'">'+hg+'</span>'
-    +'<button class="step-btn" onclick="stepScore('+m.id+',\'home\',1)">+</button>'
-    +'</div>'
+    +'<div class="score-stepper"><button class="step-btn" onclick="stepScore('+m.id+',\'home\',-1)">-</button><span class="step-val" id="sv-home-'+m.id+'">'+hg+'</span><button class="step-btn" onclick="stepScore('+m.id+',\'home\',1)">+</button></div>'
     +'<span class="ser-dash">\u2013</span>'
-    +'<div class="score-stepper">'
-    +'<button class="step-btn" onclick="stepScore('+m.id+',\'away\',-1)">-</button>'
-    +'<span class="step-val" id="sv-away-'+m.id+'">'+ag+'</span>'
-    +'<button class="step-btn" onclick="stepScore('+m.id+',\'away\',1)">+</button>'
-    +'</div>'
+    +'<div class="score-stepper"><button class="step-btn" onclick="stepScore('+m.id+',\'away\',-1)">-</button><span class="step-val" id="sv-away-'+m.id+'">'+ag+'</span><button class="step-btn" onclick="stepScore('+m.id+',\'away\',1)">+</button></div>'
     +'</div>'
     +'</div>';
 }
@@ -823,7 +815,7 @@ function renderScores2(){
   html+='<div class="scores-subtabs">';
   html+='<button class="scores-subtab'+(scoresTab==='upcoming'?' active':'')+'" onclick="switchScoresTab(\'upcoming\')">Upcoming</button>';
   html+='<button class="scores-subtab'+(scoresTab==='completed'?' active':'')+'" onclick="switchScoresTab(\'completed\')">Completed</button>';
-  html+='<button class="scores-subtab'+(scoresTab==='derbies'?' active':'')+'" onclick="switchScoresTab(\'derbies\')">\u2694\ufe0f Derbies</button>';
+  html+='<button class="scores-subtab'+(scoresTab==='rivalries'?' active':'')+'" onclick="switchScoresTab(\'derbies\')">\u2694\ufe0f Derbies</button>';
   html+='</div>';
 
   if(scoresTab==='upcoming'){
@@ -859,7 +851,7 @@ function renderScores2(){
       });
     } else { html+='<div class="empty">No completed matches yet</div>'; }
   } else {
-    // Derbies tab
+    // Rivalries tab
     var allDerbies=matches.filter(function(m){
       var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
       return ho&&ao&&ho.toLowerCase()!==ao.toLowerCase();
@@ -867,10 +859,10 @@ function renderScores2(){
     var completedDerbies=allDerbies.filter(function(m){return getMatchPhase(m)==='finished';});
     var upcomingDerbies=allDerbies.filter(function(m){return getMatchPhase(m)!=='finished';});
     if(!allDerbies.length){
-      html+='<div class="empty"><div class="empty-icon">\u2694\ufe0f</div>No derbies yet \u2014 happens when two participants\'s teams face each other</div>';
+      html+='<div class="empty"><div class="empty-icon">\u2694\ufe0f</div>No rivalries yet \u2014 happens when two participants\'s teams face each other</div>';
     } else {
       if(upcomingDerbies.length){
-        html+='<div class="section-label" style="margin-bottom:8px">Upcoming derbies</div>';
+        html+='<div class="section-label" style="margin-bottom:8px">Upcoming rivalries</div>';
         upcomingDerbies.forEach(function(m){
           var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
           var phase=getMatchPhase(m);
@@ -881,7 +873,7 @@ function renderScores2(){
         });
       }
       if(completedDerbies.length){
-        html+='<div class="section-label" style="margin-top:14px;margin-bottom:8px">Completed derbies</div>';
+        html+='<div class="section-label" style="margin-top:14px;margin-bottom:8px">Completed rivalries</div>';
         completedDerbies.forEach(function(m){
           var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
           var homeWon=m.home_goals>m.away_goals,awayWon=m.away_goals>m.home_goals;
@@ -1123,39 +1115,7 @@ function prizeCountdownText(deadline){
   return m+'m';
 }
 
-// ── OVERRIDE renderGroups to add form guide ───────────────
-var _orig_renderGroups=renderGroups;
-renderGroups=function(){
-  _orig_renderGroups();
-  var el=document.getElementById('tab-groups');
-  // Re-render with form guides
-  var tables=computeGroupTables();
-  var html='<div class="groups-grid">';
-  Object.keys(GROUPS).forEach(function(g){
-    var sorted=GROUPS[g].slice().sort(function(a,b){
-      var ta=tables[g][a],tb=tables[g][b];
-      return(tb.pts-ta.pts)||((tb.gf-tb.ga)-(ta.gf-ta.ga))||(tb.gf-ta.gf);
-    });
-    var maxPlayed=Math.max.apply(null,sorted.map(function(t){return tables[g][t].p;}));
-    html+='<div class="group-card"><div class="group-header">GROUP '+g+'</div><div class="group-table-wrap">'
-      +'<table class="group-table"><thead><tr><th>Team</th><th>Owner</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th><th>Form</th></tr></thead><tbody>';
-    sorted.forEach(function(t,i){
-      var s=tables[g][t];
-      var qualified=maxPlayed>=3&&i<2;
-      var eliminated=maxPlayed>=3&&i>=2;
-      var form=getTeamForm(t);
-      var formHtml=form.map(formBadge).join('');
-      html+='<tr class="'+(qualified?'qualified':eliminated?'eliminated':'')+'">'
-        +'<td>'+t+'</td><td>'+(ownerOfTeam(t)||'\u2014')+'</td>'
-        +'<td>'+s.p+'</td><td>'+s.w+'</td><td>'+s.d+'</td><td>'+s.l+'</td>'
-        +'<td>'+s.gf+'</td><td>'+s.ga+'</td><td class="pts-col">'+s.pts+'</td>'
-        +'<td class="form-col">'+formHtml+'</td></tr>';
-    });
-    html+='</tbody></table></div></div>';
-  });
-  html+='</div>';
-  el.innerHTML=html;
-};
+
 
 // ── OVERRIDE renderPrizes to add countdown ────────────────
 var _orig_renderPrizes=renderPrizes;
@@ -1519,22 +1479,7 @@ function clearLbSearch(){
 
 // ── FIX 8: Prize pot count-up only on first page load ─
 var _firstLoad = true;
-var _orig_renderLb_final = renderLeaderboard;
-renderLeaderboard = function(){
-  _orig_renderLb_final();
-  if(_firstLoad){
-    _firstLoad = false;
-    var potEl = document.getElementById('pot-amount');
-    if(potEl && !_potAnimated){
-      _potAnimated = true;
-      countUp(potEl, pot(), 900);
-    }
-  } else {
-    // Just set value directly on re-renders
-    var potEl2 = document.getElementById('pot-amount');
-    if(potEl2 && _potAnimated) potEl2.textContent = '\u00a3' + Math.round(pot());
-  }
-};
+
 
 // ============================================================
 // NEW: LIVE ALERTS, PREDICTIONS, CURSED TEAM, BUBBLE, ADMIN QOL
@@ -2151,42 +2096,10 @@ function getWhoToBeat(){
 // ── PATCH renderLeaderboard2 TO ADD BEST PREDICTOR BADGE AND WHO TO BEAT ──
 
 
-// ── PATCH renderMyTeams TO ADD BOTTOMING OUT ─────────────
-var _prev_renderMyTeams = typeof renderMyTeams === 'function' ? renderMyTeams : function(){};
-renderMyTeams = function(){
-  _prev_renderMyTeams();
-  var el = document.getElementById('tab-myteams');
-  if(!el) return;
 
-  var bottoming = getBottomingOut();
-  if(!bottoming.length) return;
 
-  var html = '<div class="section-label" style="margin-top:1.5rem">Bottoming out \ud83d\udfe1</div>'
-    +'<div class="alert warning" style="margin-bottom:10px;font-size:12px">Teams currently bottom of their group — worst GD prize contenders</div>'
-    +'<div class="card">';
-  bottoming.forEach(function(b, i){
-    html += '<div class="lb-row">'
-      +'<span class="lb-pos" style="font-size:15px">'+(i===0?'\ud83e\udd47':'')+'</span>'
-      +'<div class="lb-main"><div class="lb-top-row">'
-      +'<span class="lb-name">'+esc(b.team)+' <span style="font-size:11px;color:var(--text-muted)">Grp '+b.group+'</span></span>'
-      +'<span style="font-size:13px;font-weight:600;color:var(--red)">'+b.pts+' pts</span>'
-      +'</div>'
-      +'<div style="font-size:11px;color:var(--text-muted)">GD: '+(b.gd>0?'+':'')+b.gd+' \u00b7 '+(b.owner?'\ud83d\udc64 '+esc(b.owner):'No owner')+'</div>'
-      +'</div></div>';
-  });
-  html += '</div>';
-  el.innerHTML += html;
-};
 
-// ── PREDICTION LOCK — grey out inputs for kicked-off games ─
-var _prev_renderPredictions = renderPredictions;
-renderPredictions = function(){
-  _prev_renderPredictions();
-  // Lock inputs for games that have started
-  document.querySelectorAll('.pred-row').forEach(function(row){
-    // Already handled in buildPredRow by checking phase
-  });
-};
+
 
 // Override pred row to lock if game has started — patch changePred
 var _orig_changePred = changePred;
