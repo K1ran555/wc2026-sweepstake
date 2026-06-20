@@ -786,7 +786,7 @@ function renderLeaderboard2(){
 // ── ENHANCED SCORES WITH COUNTDOWN ───────────────────────
 function renderScores2(){
   var el=document.getElementById('tab-scores');
-  if(!matches.length){el.innerHTML='<div class="empty"><div class="empty-icon">⚽</div>No fixtures loaded</div>';return;}
+  if(!matches.length){el.innerHTML='<div class="empty"><div class="empty-icon">\u26bd</div>No fixtures loaded</div>';return;}
   var withPhase=matches.map(function(m){return{m:m,phase:getMatchPhase(m),kickoff:parseMatchDateTime(m)};});
   var live=withPhase.filter(function(x){return x.phase==='live';}).map(function(x){return x.m;});
   var finished=withPhase.filter(function(x){return x.phase==='finished';})
@@ -795,33 +795,64 @@ function renderScores2(){
   var upcoming=withPhase.filter(function(x){return x.phase==='upcoming';})
     .sort(function(a,b){var ka=a.kickoff?a.kickoff.getTime():Infinity,kb=b.kickoff?b.kickoff.getTime():Infinity;return ka-kb;})
     .map(function(x){return x.m;});
-  // Auto-start: live games with null scores default to 0-0
+
+  // Auto-start: live games with null scores -> 0-0
   live.forEach(function(m){
     if(m.home_goals===null||m.away_goals===null){
       m.home_goals=0;m.away_goals=0;
       sbPatch('matches',{id:m.id},{home_goals:0,away_goals:0}).catch(function(){});
     }
   });
+
+  // Check upsets
+  checkUpsets();
+
   // Countdown bar
   var next=upcoming[0];
-  var countdownBar='';
+  var html='';
   if(next){
     var timeStr=next.match_date+(next.match_time?' '+next.match_time+' BST':'');
-    countdownBar='<div class="countdown-bar">'
-      +'<span class="countdown-label">⏱ Next: '+esc(next.home)+' vs '+esc(next.away)+'</span>'
+    html+='<div class="countdown-bar">'
+      +'<span class="countdown-label">\u23f1 Next: '+esc(next.home)+' vs '+esc(next.away)+'</span>'
       +'<span id="countdown-display" class="countdown-time">'+getCountdownText()+'</span>'
       +'<span class="countdown-when">'+timeStr+'</span>'
       +'</div>';
   }
-  var tabBar='<div class="admin-subtabs" style="margin-bottom:14px">'
-    +'<button class="admin-subtab'+(scoresTab==='upcoming'?' active':'')+" onclick=\"switchScoresTab('upcoming')\">Upcoming</button>"
-    +'<button class="admin-subtab'+(scoresTab==='completed'?' active':'')+" onclick=\"switchScoresTab('completed')\">Completed</button>"
+
+  // Rivalry banner
+  var rivalries=getRivalryMatches();
+  if(rivalries.length){
+    html+='<div class="derby-banner">';
+    rivalries.forEach(function(m){
+      var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
+      var phase=getMatchPhase(m);
+      var tag=phase==='live'?' \u25cf LIVE':'';
+      html+='\u2694\ufe0f <strong>'+esc(ho)+'</strong> vs <strong>'+esc(ao)+'</strong>'
+        +' \u2014 '+esc(m.home)+' vs '+esc(m.away)
+        +' \u00b7 '+m.match_date+' '+m.match_time+tag+'<br>';
+    });
+    html+='</div>';
+  }
+
+  // Sub-tabs
+  html+='<div class="scores-subtabs">'
+    +'<button class="scores-subtab'+(scoresTab==='upcoming'?' active':'')+'" onclick="switchScoresTab(\'upcoming\')">Upcoming</button>'
+    +'<button class="scores-subtab'+(scoresTab==='completed'?' active':'')+'" onclick="switchScoresTab(\'completed\')">Completed</button>'
     +'</div>';
-  var html=countdownBar+tabBar;
+
   if(scoresTab==='upcoming'){
-    if(live.length){html+='<div class="section-label">Live now</div>';live.forEach(function(m){html+=matchCard(m,'live');});html+='<div style="margin-top:14px"></div>';}
-    if(upcoming.length){html+='<div class="section-label">Upcoming</div>';upcoming.forEach(function(m){html+=matchCard(m,'ns');});}
-    if(!live.length&&!upcoming.length)html+='<div class="empty">No upcoming fixtures</div>';
+    if(live.length){
+      html+='<div class="section-label" style="margin-bottom:8px">\ud83d\udd34 Live</div>';
+      live.forEach(function(m){html+=matchCard(m,'live');});
+      html+='<div style="margin-top:12px"></div>';
+    }
+    if(upcoming.length){
+      if(live.length) html+='<div class="section-label" style="margin-bottom:8px">Upcoming</div>';
+      upcoming.forEach(function(m){html+=matchCard(m,'ns');});
+    }
+    if(!live.length&&!upcoming.length){
+      html+='<div class="empty"><div class="empty-icon">\ud83d\udcc5</div>No upcoming fixtures</div>';
+    }
   } else {
     if(finished.length){
       // Group by date
@@ -837,18 +868,22 @@ function renderScores2(){
         byDay[day].forEach(function(m){
           var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
           html+='<div class="day-result-row">'
-            +'<span class="day-result-home">'+esc(m.home)+(ho?' <span class="day-owner">('+esc(ho)+')</span>':'')+'</span>'
-            +'<span class="day-result-score">'+m.home_goals+' – '+m.away_goals+'</span>'
-            +'<span class="day-result-away">'+(ao?'<span class="day-owner">('+esc(ao)+')</span> ':'')+esc(m.away)+'</span>'
+            +'<span class="day-result-home">'+esc(m.home)+(ho?'<br><span class="day-owner">'+esc(ho)+'</span>':'')+'</span>'
+            +'<span class="day-result-score">'+m.home_goals+' \u2013 '+m.away_goals+'</span>'
+            +'<span class="day-result-away">'+esc(m.away)+(ao?'<br><span class="day-owner">'+esc(ao)+'</span>':'')+'</span>'
             +'</div>';
         });
         html+='</div>';
       });
-    } else html+='<div class="empty">No completed matches yet</div>';
+    } else {
+      html+='<div class="empty"><div class="empty-icon">\u23f3</div>No completed matches yet</div>';
+    }
   }
+
   el.innerHTML=html;
 }
 function switchScoresTab(sub){scoresTab=sub;renderScores2();}
+
 
 // ── PATCH saveScoreDirect for error toast ────────────────
 var _orig_saveScoreDirect=saveScoreDirect;
@@ -865,22 +900,10 @@ saveScoreDirect=function(id){
 };
 
 // ── OVERRIDE refreshCurrent ───────────────────────────────
-refreshCurrent=function(){
-  if(currentTab==='leaderboard')renderLeaderboard2();
-  else if(currentTab==='scores')renderScores2();
-  else if(currentTab==='groups')renderGroups();
-  else if(currentTab==='prizes')renderPrizes();
-  else if(currentTab==='admin')renderAdmin();
-};
+
 
 // ── OVERRIDE showTab ─────────────────────────────────────
-showTab=function(tab,btn){
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
-  btn.classList.add('active');
-  document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
-  document.getElementById('tab-'+tab).classList.add('active');
-  currentTab=tab;refreshCurrent();
-};
+
 
 // ── TRACK lastUpdated on each loadAll ────────────────────
 var _orig_loadAll=loadAll;
@@ -1139,26 +1162,10 @@ renderPrizes=function(){
 };
 
 // ── OVERRIDE refreshCurrent to include new tabs ───────────
-var _prev_refreshCurrent=refreshCurrent;
-refreshCurrent=function(){
-  if(currentTab==='leaderboard'){var f=typeof renderLeaderboard2==='function'?renderLeaderboard2:renderLeaderboard;f();checkLeaderChange();}
-  else if(currentTab==='scores'){var f2=typeof renderScores2==='function'?renderScores2:renderScores;f2();}
-  else if(currentTab==='groups')renderGroups();
-  else if(currentTab==='prizes')renderPrizes();
-  else if(currentTab==='bracket')renderBracket();
-  else if(currentTab==='myteams')renderMyTeams();
-  else if(currentTab==='admin')renderAdmin();
-};
+
 
 // ── OVERRIDE showTab for new tabs ─────────────────────────
-showTab=function(tab,btn){
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
-  btn.classList.add('active');
-  document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
-  var tabEl=document.getElementById('tab-'+tab);
-  if(tabEl)tabEl.classList.add('active');
-  currentTab=tab;refreshCurrent();
-};
+
 
 // Init prevLeader from current standings
 var _initLb=computeLeaderboard();
@@ -1305,25 +1312,7 @@ function flashLeaderboardRows(){
 }
 
 // ── TAB FADE TRANSITION ──────────────────────────────────
-showTab=function(tab,btn){
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
-  btn.classList.add('active');
-  var current=document.querySelector('.tab-content.active');
-  if(current){
-    current.style.opacity='0';
-    setTimeout(function(){
-      document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');t.style.opacity='';});
-      var next=document.getElementById('tab-'+tab);
-      if(next){next.classList.add('active');next.style.opacity='0';setTimeout(function(){next.style.transition='opacity 0.2s';next.style.opacity='1';setTimeout(function(){next.style.transition='';},200);},10);}
-      currentTab=tab;refreshCurrent();
-    },120);
-  } else {
-    document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
-    var next=document.getElementById('tab-'+tab);
-    if(next)next.classList.add('active');
-    currentTab=tab;refreshCurrent();
-  }
-};
+
 
 // ── OVERRIDE stepScore FOR HAPTIC ────────────────────────
 var _orig_stepScore=stepScore;
@@ -1400,16 +1389,7 @@ renderLeaderboard=function(){
 };
 
 // ── OVERRIDE refreshCurrent TO INCLUDE CHECKS ────────────
-refreshCurrent=function(){
-  checkScoreChanges();
-  if(currentTab==='leaderboard'){var f=typeof renderLeaderboard2==='function'?renderLeaderboard2:renderLeaderboard;f();checkLeaderChange();}
-  else if(currentTab==='scores'){var f2=typeof renderScores2==='function'?renderScores2:renderScores;f2();}
-  else if(currentTab==='groups')renderGroups();
-  else if(currentTab==='prizes')renderPrizes();
-  else if(currentTab==='bracket')renderBracket();
-  else if(currentTab==='myteams')renderMyTeams();
-  else if(currentTab==='admin')renderAdmin();
-};
+
 
 // ── INJECT THEME + SOUND TOGGLES INTO HEADER ─────────────
 (function(){
@@ -1462,11 +1442,7 @@ computeWorstGD = function(){
 };
 
 // ── FIX 2: Clear lbSearch when switching away from leaderboard ─
-var _fix_showTab = showTab;
-showTab = function(tab, btn){
-  if(tab !== 'leaderboard') lbSearch = '';
-  _fix_showTab(tab, btn);
-};
+
 
 // ── FIX 3: Count-up should only fire on initial load, not re-renders ─
 // Reset _animated flag on full data reload so it plays once per session
@@ -1516,13 +1492,7 @@ computeLeaderboard = function(){
 
 // ── FIX 6: Nav tab overflow on small screens ─
 // Done via CSS (see style.css append) - JS just ensures active tab scrolls into view
-var _fix2_showTab = showTab;
-showTab = function(tab, btn){
-  _fix2_showTab(tab, btn);
-  if(btn && btn.scrollIntoView){
-    setTimeout(function(){ btn.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'}); }, 50);
-  }
-};
+
 
 // ── FIX 7: Clear search input value when Clear is clicked ─
 function clearLbSearch(){
@@ -1915,17 +1885,7 @@ renderAdmin = function(){
 };
 
 // ── OVERRIDE refreshCurrent FOR NEW TABS ─────────────────
-refreshCurrent = function(){
-  checkScoreChanges && checkScoreChanges();
-  if(currentTab==='leaderboard'){var f=typeof renderLeaderboard2==='function'?renderLeaderboard2:renderLeaderboard;f();typeof checkLeaderChange==='function'&&checkLeaderChange();}
-  else if(currentTab==='scores'){var f2=typeof renderScores2==='function'?renderScores2:renderScores;f2();}
-  else if(currentTab==='groups')renderGroups();
-  else if(currentTab==='prizes')renderPrizes();
-  else if(currentTab==='bracket')renderBracket();
-  else if(currentTab==='myteams')renderMyTeams();
-  else if(currentTab==='predictions')renderPredictions();
-  else if(currentTab==='admin')renderAdmin();
-};
+
 
 // ── LOAD PREDICTIONS AND INIT REALTIME ───────────────────
 loadPredictions();
@@ -2171,76 +2131,10 @@ function getWhoToBeat(){
 }
 
 // ── PATCH renderScores2 TO ADD RIVALRY + UPSET ALERTS ────
-var _prev_renderScores2 = typeof renderScores2 === 'function' ? renderScores2 : renderScores;
-renderScores2 = function(){
-  _prev_renderScores2();
-  var el = document.getElementById('tab-scores');
-  if(!el) return;
-
-  // Derby fixtures banner
-  var rivalries = getRivalryMatches();
-  if(rivalries.length){
-    var derbyHtml = '<div class="derby-banner">';
-    rivalries.forEach(function(m){
-      var ho = ownerOfTeam(m.home), ao = ownerOfTeam(m.away);
-      var phase = getMatchPhase(m);
-      var liveTag = phase==='live' ? ' \u25cf LIVE' : '';
-      derbyHtml += '\u2694\ufe0f <strong>'+esc(ho)+'</strong> vs <strong>'+esc(ao)+'</strong>'
-        +' \u2014 '+esc(m.home)+' vs '+esc(m.away)
-        +' \u00b7 '+m.match_date+' '+m.match_time+liveTag+'<br>';
-    });
-    derbyHtml += '</div>';
-    el.innerHTML = derbyHtml + el.innerHTML;
-  }
-
-  // Check for upsets
-  checkUpsets();
-};
+// rivalry and upsets handled inside renderScores2
 
 // ── PATCH renderLeaderboard2 TO ADD BEST PREDICTOR BADGE AND WHO TO BEAT ──
-var _prev_renderLeaderboard2 = typeof renderLeaderboard2 === 'function' ? renderLeaderboard2 : renderLeaderboard;
-renderLeaderboard2 = function(){
-  _prev_renderLeaderboard2();
-  var el = document.getElementById('tab-leaderboard');
-  if(!el) return;
 
-  // Best predictor badge — inject into leaderboard rows
-  var bestPred = getBestPredictor();
-  if(bestPred){
-    var rows = el.querySelectorAll('.lb-row');
-    rows.forEach(function(row){
-      var nameEl = row.querySelector('.lb-name');
-      if(nameEl && nameEl.textContent.toLowerCase().indexOf(bestPred.name.toLowerCase()) !== -1){
-        nameEl.innerHTML += ' <span class="best-pred-badge">\ud83c\udfaf Best predictor</span>';
-      }
-    });
-  }
-
-  // Who do I need to beat — add after standings
-  var wtb = getWhoToBeat();
-  if(wtb){
-    var card = document.createElement('div');
-    card.innerHTML = '<div class="section-label" style="margin-top:1.5rem">Who you need to beat</div>'
-      +'<div class="card">';
-    wtb.targets.slice().reverse().forEach(function(target, i){
-      var gap = target.total - wtb.me.total;
-      card.innerHTML += '<div class="lb-row">'
-        +'<span class="lb-pos" style="font-size:11px;color:var(--text-muted)">'+(wtb.myRank-wtb.targets.length+i)+'</span>'
-        +'<div class="lb-main">'
-        +'<div class="lb-top-row">'
-        +'<span class="lb-name">'+esc(target.name)+'</span>'
-        +'<span style="font-size:12px;color:var(--red)">+'+gap+' pts ahead</span>'
-        +'</div>'
-        +'<div class="lb-teams-row">'
-        +'<span class="lb-team-chip strong"><span class="chip-dot green-dot"></span>'+esc(target.team)+' <span class="chip-pts">'+target.t1pts+'</span></span>'
-        +'<span class="lb-plus">+</span>'
-        +'<span class="lb-team-chip weak"><span class="chip-dot red-dot"></span>'+esc(target.team2)+' <span class="chip-pts">'+target.t2pts+'</span></span>'
-        +'</div></div></div>';
-    });
-    card.innerHTML += '</div>';
-    el.appendChild(card);
-  }
-};
 
 // ── PATCH renderMyTeams TO ADD BOTTOMING OUT ─────────────
 var _prev_renderMyTeams = typeof renderMyTeams === 'function' ? renderMyTeams : function(){};
@@ -2312,22 +2206,7 @@ submitPrevPred = function(id){
 };
 
 // ── OVERRIDE refreshCurrent FINAL ────────────────────────
-refreshCurrent = function(){
-  typeof checkScoreChanges === 'function' && checkScoreChanges();
-  typeof checkUpsets === 'function' && checkUpsets();
-  if(currentTab==='leaderboard'){
-    var f = typeof renderLeaderboard2==='function' ? renderLeaderboard2 : renderLeaderboard;
-    f();
-    typeof checkLeaderChange==='function' && checkLeaderChange();
-  }
-  else if(currentTab==='scores'){var f2=typeof renderScores2==='function'?renderScores2:renderScores;f2();}
-  else if(currentTab==='groups') renderGroups();
-  else if(currentTab==='prizes') renderPrizes();
-  else if(currentTab==='bracket') renderBracket();
-  else if(currentTab==='myteams') renderMyTeams();
-  else if(currentTab==='predictions') renderPredictions();
-  else if(currentTab==='admin') renderAdmin();
-};
+
 
 // ============================================================
 // LIVE MATCH HEADER BANNER + RIVALRY FIX
@@ -2385,11 +2264,346 @@ loadAll = function(){
 };
 
 // ── PATCH refreshCurrent TO UPDATE BANNER ────────────────
-var _liveBanner_orig_refresh = refreshCurrent;
-refreshCurrent = function(){
-  updateLiveBanner();
-  _liveBanner_orig_refresh();
-};
+
 
 // Run immediately
 updateLiveBanner();
+
+// ============================================================
+// SINGLE CLEAN refreshCurrent AND showTab (replaces all overrides)
+// ============================================================
+refreshCurrent = function(){
+  updateLiveBanner();
+  typeof checkScoreChanges==='function' && checkScoreChanges();
+  typeof checkUpsets==='function' && checkUpsets();
+  if(currentTab==='leaderboard'){
+    renderLeaderboard2();
+    typeof checkLeaderChange==='function' && checkLeaderChange();
+  }
+  else if(currentTab==='scores') renderScores2();
+  else if(currentTab==='groups') renderGroups();
+  else if(currentTab==='prizes') renderPrizes();
+  else if(currentTab==='bracket') renderBracket();
+  else if(currentTab==='myteams') renderMyTeams();
+  else if(currentTab==='predictions') renderPredictions();
+  else if(currentTab==='admin') renderAdmin();
+};
+
+showTab = function(tab, btn){
+  if(tab !== 'leaderboard') lbSearch = '';
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  btn.classList.add('active');
+  var current = document.querySelector('.tab-content.active');
+  var next = document.getElementById('tab-'+tab);
+  if(current && current !== next){
+    current.style.opacity='0';
+    setTimeout(function(){
+      document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');t.style.opacity='';});
+      if(next){next.classList.add('active');next.style.opacity='0';setTimeout(function(){next.style.transition='opacity 0.2s';next.style.opacity='1';setTimeout(function(){next.style.transition='';},200);},10);}
+      currentTab=tab; refreshCurrent();
+    },120);
+  } else {
+    document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
+    if(next) next.classList.add('active');
+    currentTab=tab; refreshCurrent();
+  }
+  // Scroll active tab into view on mobile
+  setTimeout(function(){if(btn.scrollIntoView)btn.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});},60);
+};
+
+// Also consolidate renderLeaderboard2 — patch best predictor and who-to-beat onto base
+
+
+// ============================================================
+// FLOW + SOCIAL FEATURES
+// ============================================================
+
+// ── STAGE DETECTION ──────────────────────────────────────
+var STAGE_ORDER = ['GROUP_STAGE','LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','FINAL'];
+
+function getCurrentStage(){
+  var stages = {};
+  matches.forEach(function(m){ stages[m.stage] = true; });
+  // Find the highest active stage
+  var active = null;
+  STAGE_ORDER.forEach(function(s){
+    if(stages[s]) active = s;
+  });
+  return active || 'GROUP_STAGE';
+}
+
+function getStageProgress(){
+  var now = new Date();
+  // Key tournament dates (BST = UTC+1)
+  var groupEnd    = new Date('2026-06-29T02:30:00Z'); // after last group game
+  var r32End      = new Date('2026-07-03T02:00:00Z');
+  var r16End      = new Date('2026-07-07T02:00:00Z');
+  var qfEnd       = new Date('2026-07-11T02:00:00Z');
+  var sfEnd       = new Date('2026-07-15T02:00:00Z');
+  var finalDate   = new Date('2026-07-19T18:00:00Z');
+  var finalEnd    = new Date('2026-07-19T22:00:00Z');
+
+  if(now < groupEnd) return {stage:'GROUP_STAGE', next:'Round of 32', nextDate:groupEnd};
+  if(now < r32End)   return {stage:'LAST_32',     next:'Round of 16', nextDate:r32End};
+  if(now < r16End)   return {stage:'LAST_16',     next:'Quarter-finals', nextDate:r16End};
+  if(now < qfEnd)    return {stage:'QUARTER_FINALS', next:'Semi-finals', nextDate:qfEnd};
+  if(now < sfEnd)    return {stage:'SEMI_FINALS',  next:'Final', nextDate:sfEnd};
+  if(now < finalEnd) return {stage:'FINAL',        next:null, nextDate:finalEnd};
+  return {stage:'DONE', next:null, nextDate:null};
+}
+
+function stageCountdownText(date){
+  if(!date) return '';
+  var diff = date.getTime() - Date.now();
+  if(diff <= 0) return 'now';
+  var d=Math.floor(diff/86400000),h=Math.floor((diff%86400000)/3600000),m=Math.floor((diff%3600000)/60000);
+  if(d>0) return d+'d '+h+'h';
+  if(h>0) return h+'h '+m+'m';
+  return m+'m';
+}
+
+// ── STAGE PROGRESS BANNER ────────────────────────────────
+function renderStageBanner(){
+  var sp = getStageProgress();
+  var el = document.getElementById('stage-progress-banner');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'stage-progress-banner';
+    // Insert before main
+    var main = document.querySelector('main');
+    if(main) main.parentNode.insertBefore(el, main);
+  }
+  if(sp.stage === 'DONE'){
+    el.className = 'stage-progress-banner done';
+    el.innerHTML = '\ud83c\udfc6 Tournament complete! Final leaderboard is locked in.';
+    return;
+  }
+  var stageName = STAGE_LABELS[sp.stage] || sp.stage;
+  var nextHtml = sp.next
+    ? ' \u2014 <span style="color:var(--text-muted);font-size:12px">' + sp.next + ' in <strong style="color:var(--gold)">' + stageCountdownText(sp.nextDate) + '</strong></span>'
+    : '';
+  el.className = 'stage-progress-banner';
+  el.innerHTML = '<span class="stage-dot"></span> <strong>' + stageName + '</strong>' + nextHtml;
+}
+
+// ── FINAL COUNTDOWN ON LEADERBOARD ───────────────────────
+function getFinalCountdownHtml(){
+  var finalDate = new Date('2026-07-19T18:00:00Z');
+  var now = new Date();
+  if(now > finalDate) return '';
+  var diff = finalDate.getTime() - now.getTime();
+  var d=Math.floor(diff/86400000),h=Math.floor((diff%86400000)/3600000),m=Math.floor((diff%3600000)/60000);
+  return '<div class="final-countdown">'
+    +'\ud83c\udfc6 World Cup Final in '
+    +'<span class="fc-num">'+d+'</span><span class="fc-unit">d</span> '
+    +'<span class="fc-num">'+h+'</span><span class="fc-unit">h</span> '
+    +'<span class="fc-num">'+m+'</span><span class="fc-unit">m</span>'
+    +'</div>';
+}
+
+// ── BIGGEST MOVER BADGE ──────────────────────────────────
+var prevLbSnapshot = {};
+
+function updateBiggestMover(lb){
+  if(!Object.keys(prevLbSnapshot).length){
+    lb.forEach(function(e,i){ prevLbSnapshot[e.name] = i+1; });
+    return null;
+  }
+  var bestMove = null, bestDelta = 0;
+  lb.forEach(function(e, i){
+    var prev = prevLbSnapshot[e.name];
+    if(!prev) return;
+    var delta = prev - (i+1); // positive = moved up
+    if(delta > bestDelta){ bestDelta = delta; bestMove = {name:e.name, delta:delta}; }
+  });
+  lb.forEach(function(e,i){ prevLbSnapshot[e.name] = i+1; });
+  return bestMove;
+}
+
+// ── QR CODE ──────────────────────────────────────────────
+function showQRCode(){
+  var url = 'https://k1ran555.github.io/wc2026-sweepstake/';
+  // Use QR server API
+  var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url) + '&bgcolor=0d1117&color=c9a84c&margin=10';
+  var modal = document.getElementById('qr-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'qr-modal';
+    modal.className = 'qr-modal';
+    modal.onclick = function(e){ if(e.target===modal) modal.style.display='none'; };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = '<div class="qr-inner">'
+    +'<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:12px">\ud83d\udcf1 Share the sweepstake</div>'
+    +'<img src="'+qrUrl+'" width="200" height="200" style="border-radius:8px;display:block;margin:0 auto 12px">'
+    +'<div style="font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:12px">Scan to open on any device</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);text-align:center;word-break:break-all">'+url+'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button class="btn-whatsapp" style="flex:1;justify-content:center" onclick="shareWhatsApp()">Share via WhatsApp</button>'
+    +'<button class="btn" style="flex:1" onclick="document.getElementById(\'qr-modal\').style.display=\'none\'">Close</button>'
+    +'</div>'
+    +'</div>';
+  modal.style.display = 'flex';
+}
+
+// ── SHAREABLE LEADERBOARD IMAGE ──────────────────────────
+function shareLeaderboardImage(){
+  var lb = computeLeaderboard();
+  var p = pot();
+  var medals = ['\ud83e\udd47','\ud83e\udd48','\ud83e\udd49'];
+  var lines = ['\u26bd WC2026 Sweepstake \u2014 Current Standings\n'];
+  lb.slice(0,5).forEach(function(e,i){
+    var medal = medals[i] || (i+1)+'.';
+    lines.push(medal+' '+e.name+' \u2014 '+e.total+' pts ('+e.team+' & '+e.team2+')');
+  });
+  lines.push('\nPrize pot: '+fmt(p));
+  lines.push('https://k1ran555.github.io/wc2026-sweepstake/');
+  var text = lines.join('\n');
+  if(navigator.share){
+    navigator.share({title:'WC2026 Sweepstake',text:text})
+      .catch(function(){copyToClipboard(text);});
+  } else {
+    copyToClipboard(text);
+    showToast('Leaderboard copied to clipboard!','success');
+  }
+}
+
+function copyToClipboard(text){
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(text).catch(function(){});
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+  }
+}
+
+// ── SCORE CHANGE NOTIFICATIONS ────────────────────────────
+var notifPermission = 'default';
+function requestNotifPermission(){
+  if(!('Notification' in window)) return;
+  Notification.requestPermission().then(function(p){ notifPermission = p; });
+}
+
+function sendGoalNotif(home, away, hg, ag, scorer){
+  if(notifPermission !== 'granted') return;
+  var owner = ownerOfTeam(scorer);
+  var body = home+' '+hg+' \u2013 '+ag+' '+away
+    +(owner?' \u2014 '+owner+'\'s team!':'');
+  try {
+    new Notification('\ud83d\udea8 GOAL! '+scorer, {
+      body: body,
+      icon: 'https://k1ran555.github.io/wc2026-sweepstake/favicon.ico',
+      badge: 'https://k1ran555.github.io/wc2026-sweepstake/favicon.ico',
+      tag: 'goal-'+Date.now()
+    });
+  } catch(e){}
+}
+
+// Patch showGoalAlert to also send notification
+var _orig_showGoalAlert = showGoalAlert;
+showGoalAlert = function(home, away, side, hg, ag){
+  _orig_showGoalAlert(home, away, side, hg, ag);
+  var scorer = side==='home' ? home : away;
+  sendGoalNotif(home, away, hg, ag, scorer);
+};
+
+// ── INJECT QR + NOTIFY BUTTONS INTO HEADER ───────────────
+(function(){
+  var badges = document.querySelector('.status-badges');
+  if(!badges) return;
+
+  var qrBtn = document.createElement('button');
+  qrBtn.className = 'refresh-btn';
+  qrBtn.title = 'Share / QR code';
+  qrBtn.textContent = '\ud83d\udcf1';
+  qrBtn.onclick = showQRCode;
+  badges.insertBefore(qrBtn, badges.firstChild);
+
+  var notifBtn = document.createElement('button');
+  notifBtn.id = 'notif-btn';
+  notifBtn.className = 'refresh-btn';
+  notifBtn.title = 'Enable goal notifications';
+  notifBtn.textContent = '\ud83d\udd14';
+  notifBtn.onclick = function(){
+    requestNotifPermission();
+    showToast('Notifications enabled for goals!','success');
+  };
+  badges.insertBefore(notifBtn, badges.firstChild);
+})();
+
+// ── PATCH renderLeaderboard2 TO ADD FINAL COUNTDOWN + MOVER BADGE ──
+
+
+// Init
+requestNotifPermission();
+renderStageBanner();
+setInterval(renderStageBanner, 60000);
+
+// ── SINGLE CLEAN renderLeaderboard2 ──────────────────────
+renderLeaderboard2 = function(){
+  renderLeaderboard();
+  var el = document.getElementById('tab-leaderboard');
+  if(!el) return;
+  var lb = computeLeaderboard();
+  var p = pot();
+
+  // Final countdown
+  var fc = getFinalCountdownHtml();
+
+  // WhatsApp share + last updated
+  var topBar = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">'
+    +'<button class="btn-whatsapp" onclick="shareWhatsApp()">'
+    +'<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:5px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.122 1.528 5.856L.057 23.882l6.188-1.448A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.86 0-3.604-.504-5.102-1.382l-.366-.217-3.793.888.904-3.7-.238-.38A9.946 9.946 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>'
+    +'Share</button>'
+    +'<button class="btn" style="padding:8px 12px;font-size:12px" onclick="shareLeaderboardImage()">\ud83d\udcca Copy top 5</button>'
+    +'<span id="last-updated-display" style="font-size:12px;color:var(--text-muted);margin-left:auto">'+getLastUpdatedText()+'</span>'
+    +'</div>';
+
+  // Group stage complete banner
+  var banner = '';
+  if(isGroupStageComplete()){
+    var wgd = computeWorstGD();
+    banner = '<div class="stage-banner">\ud83c\udfc1 Group stage complete!'
+      +(wgd?' Worst GD: <strong>'+esc(wgd.name)+'</strong> wins '+fmt(p*0.07)+' (GD '+(wgd.gd>0?'+':'')+wgd.gd+')':'')
+      +'</div>';
+  }
+
+  // Best predictor + biggest mover badges on rows
+  var bestPred = getBestPredictor();
+  var mover = updateBiggestMover(lb);
+  el.querySelectorAll('.lb-row').forEach(function(row){
+    var nameEl = row.querySelector('.lb-name');
+    if(!nameEl) return;
+    var rowName = nameEl.textContent.toLowerCase();
+    if(bestPred && rowName.indexOf(bestPred.name.toLowerCase())!==-1 && !nameEl.querySelector('.best-pred-badge'))
+      nameEl.innerHTML += ' <span class="best-pred-badge">\ud83c\udfaf</span>';
+    if(mover && mover.delta>0 && rowName.indexOf(mover.name.toLowerCase())!==-1 && !nameEl.querySelector('.mover-badge'))
+      nameEl.innerHTML += ' <span class="mover-badge">\ud83d\ude80 +'+mover.delta+'</span>';
+  });
+
+  // Who to beat
+  var wtb = getWhoToBeat();
+  var wtbHtml = '';
+  if(wtb){
+    wtbHtml = '<div class="section-label" style="margin-top:1.5rem">Who you need to beat</div><div class="card">';
+    wtb.targets.slice().reverse().forEach(function(target,i){
+      var gap = target.total - wtb.me.total;
+      wtbHtml += '<div class="lb-row">'
+        +'<span class="lb-pos">'+(wtb.myRank-wtb.targets.length+i)+'</span>'
+        +'<div class="lb-main"><div class="lb-top-row">'
+        +'<span class="lb-name">'+esc(target.name)+'</span>'
+        +'<span style="font-size:12px;color:var(--red)">+'+gap+' pts</span>'
+        +'</div><div class="lb-teams-row">'
+        +'<span class="lb-team-chip strong"><span class="chip-dot green-dot"></span>'+esc(target.team)+' <span class="chip-pts">'+target.t1pts+'</span></span>'
+        +'<span class="lb-plus">+</span>'
+        +'<span class="lb-team-chip weak"><span class="chip-dot red-dot"></span>'+esc(target.team2)+' <span class="chip-pts">'+target.t2pts+'</span></span>'
+        +'</div></div></div>';
+    });
+    wtbHtml += '</div>';
+  }
+
+  el.innerHTML = (fc||'') + topBar + banner + el.innerHTML + wtbHtml;
+  renderStageBanner();
+};
