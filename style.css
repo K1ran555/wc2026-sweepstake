@@ -1177,3 +1177,18 @@ input[type="number"]:focus, input[type="text"]:focus, input[type="password"]:foc
   width: 100%;
   box-shadow: var(--shadow-md);
 }
+
+/* ── DERBY CARD ── */
+.derby-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.derby-card.derby-live { border-color: var(--green-border); background: var(--green-bg); }
+.derby-owners { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.derby-match { font-size: 12px; color: var(--text-muted); }
+.derby-result { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.derby-score { font-size: 15px; font-weight: 700; color: var(--gold); }
+.derby-winner { color: var(--gold); }

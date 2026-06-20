@@ -819,26 +819,12 @@ function renderScores2(){
       +'</div>';
   }
 
-  // Rivalry banner
-  var rivalries=getRivalryMatches();
-  if(rivalries.length){
-    html+='<div class="derby-banner">';
-    rivalries.forEach(function(m){
-      var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
-      var phase=getMatchPhase(m);
-      var tag=phase==='live'?' \u25cf LIVE':'';
-      html+='\u2694\ufe0f <strong>'+esc(ho)+'</strong> vs <strong>'+esc(ao)+'</strong>'
-        +' \u2014 '+esc(m.home)+' vs '+esc(m.away)
-        +' \u00b7 '+m.match_date+' '+m.match_time+tag+'<br>';
-    });
-    html+='</div>';
-  }
-
-  // Sub-tabs
-  html+='<div class="scores-subtabs">'
-    +'<button class="scores-subtab'+(scoresTab==='upcoming'?' active':'')+'" onclick="switchScoresTab(\'upcoming\')">Upcoming</button>'
-    +'<button class="scores-subtab'+(scoresTab==='completed'?' active':'')+'" onclick="switchScoresTab(\'completed\')">Completed</button>'
-    +'</div>';
+  // Sub-tabs: Upcoming | Completed | Derbies
+  html+='<div class="scores-subtabs">';
+  html+='<button class="scores-subtab'+(scoresTab==='upcoming'?' active':'')+'" onclick="switchScoresTab(\'upcoming\')">Upcoming</button>';
+  html+='<button class="scores-subtab'+(scoresTab==='completed'?' active':'')+'" onclick="switchScoresTab(\'completed\')">Completed</button>';
+  html+='<button class="scores-subtab'+(scoresTab==='derbies'?' active':'')+'" onclick="switchScoresTab(\'derbies\')">\u2694\ufe0f Derbies</button>';
+  html+='</div>';
 
   if(scoresTab==='upcoming'){
     if(live.length){
@@ -850,12 +836,9 @@ function renderScores2(){
       if(live.length) html+='<div class="section-label" style="margin-bottom:8px">Upcoming</div>';
       upcoming.forEach(function(m){html+=matchCard(m,'ns');});
     }
-    if(!live.length&&!upcoming.length){
-      html+='<div class="empty"><div class="empty-icon">\ud83d\udcc5</div>No upcoming fixtures</div>';
-    }
-  } else {
+    if(!live.length&&!upcoming.length) html+='<div class="empty">No upcoming fixtures</div>';
+  } else if(scoresTab==='completed'){
     if(finished.length){
-      // Group by date
       var byDay={};var dayOrder=[];
       finished.forEach(function(m){
         var key=m.match_date||'Unknown';
@@ -863,8 +846,7 @@ function renderScores2(){
         byDay[key].push(m);
       });
       dayOrder.forEach(function(day){
-        html+='<div class="day-results-card">'
-          +'<div class="day-results-header">'+day+'</div>';
+        html+='<div class="day-results-card"><div class="day-results-header">'+day+'</div>';
         byDay[day].forEach(function(m){
           var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
           html+='<div class="day-result-row">'
@@ -875,14 +857,47 @@ function renderScores2(){
         });
         html+='</div>';
       });
+    } else { html+='<div class="empty">No completed matches yet</div>'; }
+  } else {
+    // Derbies tab
+    var allDerbies=matches.filter(function(m){
+      var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
+      return ho&&ao&&ho.toLowerCase()!==ao.toLowerCase();
+    });
+    var completedDerbies=allDerbies.filter(function(m){return getMatchPhase(m)==='finished';});
+    var upcomingDerbies=allDerbies.filter(function(m){return getMatchPhase(m)!=='finished';});
+    if(!allDerbies.length){
+      html+='<div class="empty"><div class="empty-icon">\u2694\ufe0f</div>No derbies yet \u2014 happens when two participants\'s teams face each other</div>';
     } else {
-      html+='<div class="empty"><div class="empty-icon">\u23f3</div>No completed matches yet</div>';
+      if(upcomingDerbies.length){
+        html+='<div class="section-label" style="margin-bottom:8px">Upcoming derbies</div>';
+        upcomingDerbies.forEach(function(m){
+          var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
+          var phase=getMatchPhase(m);
+          html+='<div class="derby-card'+(phase==='live'?' derby-live':'')+'">';
+          html+='<div class="derby-owners">\u2694\ufe0f <strong>'+esc(ho)+'</strong> vs <strong>'+esc(ao)+'</strong>'+(phase==='live'?' <span class="pill pill-live">\u25cf Live</span>':'')+'</div>';
+          html+='<div class="derby-match">'+esc(m.home)+' vs '+esc(m.away)+' \u00b7 '+m.match_date+' '+m.match_time+' BST</div>';
+          html+='</div>';
+        });
+      }
+      if(completedDerbies.length){
+        html+='<div class="section-label" style="margin-top:14px;margin-bottom:8px">Completed derbies</div>';
+        completedDerbies.forEach(function(m){
+          var ho=ownerOfTeam(m.home),ao=ownerOfTeam(m.away);
+          var homeWon=m.home_goals>m.away_goals,awayWon=m.away_goals>m.home_goals;
+          html+='<div class="derby-card">';
+          html+='<div class="derby-owners">\u2694\ufe0f <strong class="'+(homeWon?'derby-winner':'')+'">'+esc(ho)+'</strong> vs <strong class="'+(awayWon?'derby-winner':'')+'">'+esc(ao)+'</strong></div>';
+          html+='<div class="derby-result">'+esc(m.home)+' <span class="derby-score">'+m.home_goals+' \u2013 '+m.away_goals+'</span> '+esc(m.away)+'</div>';
+          html+='</div>';
+        });
+      }
     }
   }
 
   el.innerHTML=html;
 }
 function switchScoresTab(sub){scoresTab=sub;renderScores2();}
+
 
 
 // ── PATCH saveScoreDirect for error toast ────────────────
