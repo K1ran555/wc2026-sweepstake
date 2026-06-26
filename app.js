@@ -2535,3 +2535,342 @@ renderLeaderboard2 = function(){
   el.innerHTML = (fc||'') + topBar + banner + el.innerHTML + wtbHtml;
   renderStageBanner();
 };
+
+// ============================================================
+// VISUAL & INTERACTIVE ENHANCEMENTS v2
+// ============================================================
+
+// ── COUNTRY FLAGS MAP ────────────────────────────────────
+var TEAM_FLAGS = {
+  'France':'🇫🇷','Spain':'🇪🇸','Argentina':'🇦🇷','England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Portugal':'🇵🇹','Brazil':'🇧🇷',
+  'Netherlands':'🇳🇱','Morocco':'🇲🇦','Belgium':'🇧🇪','Germany':'🇩🇪','Uruguay':'🇺🇾','Colombia':'🇨🇴',
+  'USA':'🇺🇸','Japan':'🇯🇵','Senegal':'🇸🇳','Croatia':'🇭🇷','Switzerland':'🇨🇭','Ecuador':'🇪🇨',
+  'Australia':'🇦🇺','South Korea':'🇰🇷','Mexico':'🇲🇽','Norway':'🇳🇴','Algeria':'🇩🇿','Sweden':'🇸🇪',
+  'South Africa':'🇿🇦','Czechia':'🇨🇿','Canada':'🇨🇦','Qatar':'🇶🇦','Bosnia & Herz.':'🇧🇦',
+  'Haiti':'🇭🇹','Scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','Paraguay':'🇵🇾','Türkiye':'🇹🇷','Curaçao':'🇨🇼',
+  "Côte d'Ivoire":'🇨🇮','Tunisia':'🇹🇳','Egypt':'🇪🇬','Iran':'🇮🇷','New Zealand':'🇳🇿',
+  'Cape Verde':'🇨🇻','Saudi Arabia':'🇸🇦','Iraq':'🇮🇶','Austria':'🇦🇹','Jordan':'🇯🇴',
+  'DR Congo':'🇨🇩','Uzbekistan':'🇺🇿','Ghana':'🇬🇭','Panama':'🇵🇦'
+};
+function flagFor(team){ return TEAM_FLAGS[team] || '🏳️'; }
+
+// ── POINTS HISTORY for sparklines ────────────────────────
+var pointsHistory = {}; // name -> [pts, pts, pts, ...]
+var historyTimer = null;
+
+function recordHistory(){
+  var lb = computeLeaderboard();
+  lb.forEach(function(e){
+    if(!pointsHistory[e.name]) pointsHistory[e.name] = [];
+    var arr = pointsHistory[e.name];
+    if(!arr.length || arr[arr.length-1] !== e.total){
+      arr.push(e.total);
+      if(arr.length > 20) arr.shift();
+    }
+  });
+}
+// Record on load + every 30s
+recordHistory();
+setInterval(recordHistory, 30000);
+
+function sparklineSVG(name){
+  var data = pointsHistory[name];
+  if(!data || data.length < 2) return '';
+  var w=60, h=20, pad=2;
+  var min=Math.min.apply(null,data), max=Math.max.apply(null,data);
+  var range=max-min||1;
+  var pts=data.map(function(v,i){
+    var x=pad+(i/(data.length-1))*(w-pad*2);
+    var y=h-pad-(v-min)/range*(h-pad*2);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  var trend=data[data.length-1]>=data[0];
+  var color=trend?'#3fb950':'#f85149';
+  return '<svg width="'+w+'" height="'+h+'" style="flex-shrink:0;margin-left:6px;opacity:0.8" viewBox="0 0 '+w+' '+h+'">'
+    +'<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>'
+    +'</svg>';
+}
+
+// ── EXPANDABLE LEADERBOARD ROWS ──────────────────────────
+var expandedRows = {};
+function toggleLbRow(name){
+  expandedRows[name] = !expandedRows[name];
+  renderLeaderboard();
+  // Scroll into view
+  setTimeout(function(){
+    var rows = document.querySelectorAll('.lb-row');
+    rows.forEach(function(r){
+      var n=r.querySelector('.lb-name');
+      if(n&&n.textContent.trim().startsWith(name.trim())){
+        r.scrollIntoView({behavior:'smooth',block:'nearest'});
+      }
+    });
+  },100);
+}
+
+// ── SWIPE BETWEEN TABS ───────────────────────────────────
+(function(){
+  var TAB_ORDER = ['leaderboard','scores','groups','prizes','myteams','predictions'];
+  var touchStartX=0, touchStartY=0;
+  document.addEventListener('touchstart',function(e){
+    touchStartX=e.touches[0].clientX;
+    touchStartY=e.touches[0].clientY;
+  },{passive:true});
+  document.addEventListener('touchend',function(e){
+    var dx=e.changedTouches[0].clientX-touchStartX;
+    var dy=e.changedTouches[0].clientY-touchStartY;
+    if(Math.abs(dx)<50||Math.abs(dy)>Math.abs(dx)*0.8)return; // too short or too vertical
+    var idx=TAB_ORDER.indexOf(currentTab);
+    if(idx===-1)return;
+    var next=dx<0?Math.min(idx+1,TAB_ORDER.length-1):Math.max(idx-1,0);
+    if(next===idx)return;
+    var newTab=TAB_ORDER[next];
+    var btn=document.querySelector('.tab[onclick*="\''+newTab+'\'"]');
+    if(btn){showTab(newTab,btn);btn.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});}
+  },{passive:true});
+})();
+
+// ── PULL TO REFRESH ───────────────────────────────────────
+(function(){
+  var startY=0, pulling=false, indicator=null;
+  function getIndicator(){
+    if(!indicator){
+      indicator=document.createElement('div');
+      indicator.id='ptr-indicator';
+      indicator.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-60px);background:var(--gold);color:#000;font-size:12px;font-weight:700;padding:8px 18px;border-radius:0 0 20px 20px;transition:transform 0.2s;z-index:9999;pointer-events:none';
+      indicator.textContent='↓ Pull to refresh';
+      document.body.appendChild(indicator);
+    }
+    return indicator;
+  }
+  document.addEventListener('touchstart',function(e){
+    if(window.scrollY===0){startY=e.touches[0].clientY;pulling=true;}
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    if(!pulling)return;
+    var dy=e.touches[0].clientY-startY;
+    if(dy>20){
+      var ind=getIndicator();
+      var pct=Math.min(dy/80,1);
+      ind.style.transform='translateX(-50%) translateY('+(pct*60-60)+'px)';
+      ind.textContent=pct>=1?'↑ Release to refresh':'↓ Pull to refresh';
+    }
+  },{passive:true});
+  document.addEventListener('touchend',function(e){
+    if(!pulling)return;
+    pulling=false;
+    var dy=e.changedTouches[0].clientY-startY;
+    var ind=getIndicator();
+    ind.style.transform='translateX(-50%) translateY(-60px)';
+    if(dy>80){
+      ind.textContent='✓ Refreshing…';
+      ind.style.transform='translateX(-50%) translateY(0px)';
+      loadAll().then(function(){
+        updateStatusBadge();refreshCurrent();
+        setTimeout(function(){ind.style.transform='translateX(-50%) translateY(-60px)';},800);
+      }).catch(function(){ind.style.transform='translateX(-50%) translateY(-60px)';});
+    }
+  },{passive:true});
+})();
+
+// ── LIVE TICKER ──────────────────────────────────────────
+function buildTicker(){
+  var live=matches.filter(function(m){return getMatchPhase(m)==='live';});
+  var finished=matches.filter(function(m){return getMatchPhase(m)==='finished';}).slice(-5);
+  var items=[];
+  live.forEach(function(m){
+    items.push('🔴 LIVE: '+m.home+' '+m.home_goals+' – '+m.away_goals+' '+m.away);
+  });
+  finished.forEach(function(m){
+    items.push('FT: '+m.home+' '+m.home_goals+' – '+m.away_goals+' '+m.away);
+  });
+  var next=matches.filter(function(m){return getMatchPhase(m)==='upcoming';})
+    .sort(function(a,b){var ka=parseMatchDateTime(a),kb=parseMatchDateTime(b);return (ka?ka.getTime():Infinity)-(kb?kb.getTime():Infinity);});
+  if(next[0]) items.push('⏰ Next: '+next[0].home+' vs '+next[0].away+' · '+next[0].match_time+' BST');
+  return items.length?items.join('   •   '):null;
+}
+
+function injectTicker(){
+  var existing=document.getElementById('live-ticker');
+  var tickerText=buildTicker();
+  if(!tickerText){if(existing)existing.remove();return;}
+  if(!existing){
+    existing=document.createElement('div');
+    existing.id='live-ticker';
+    existing.className='live-ticker';
+    var header=document.querySelector('header');
+    if(header)header.insertAdjacentElement('afterend',existing);
+  }
+  existing.innerHTML='<div class="ticker-track"><span>'+esc(tickerText)+'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'+esc(tickerText)+'</span></div>';
+}
+
+// ── GRADIENT BACKGROUND BASED ON LEADER ──────────────────
+var bgColors={
+  'France':'#002395','Spain':'#c60b1e','Argentina':'#74acdf','England':'#cf081f',
+  'Portugal':'#006600','Brazil':'#009c3b','Netherlands':'#ae1c28','Morocco':'#c1272d',
+  'Belgium':'#000000','Germany':'#000000','Uruguay':'#5EB6E4','Colombia':'#fcd116',
+  'default':'#0f1923'
+};
+function updateBgGlow(){
+  var lb=computeLeaderboard();
+  if(!lb.length)return;
+  var leader=lb[0];
+  var c=bgColors[leader.team]||bgColors[leader.team2]||bgColors['default'];
+  var root=document.documentElement;
+  root.style.setProperty('--leader-glow',c+'33');
+  root.style.setProperty('--leader-glow-strong',c+'66');
+}
+
+// ── GOAL EXPLOSION ────────────────────────────────────────
+function goalExplosion(x,y){
+  var emojis=['⚽','🎉','✨','💥','🔥'];
+  for(var i=0;i<12;i++){
+    (function(idx){
+      var el=document.createElement('div');
+      el.className='goal-particle';
+      el.textContent=emojis[Math.floor(Math.random()*emojis.length)];
+      el.style.cssText='position:fixed;left:'+(x||50)+'%;top:'+(y||50)+'%;font-size:'+Math.round(16+Math.random()*16)+'px;pointer-events:none;z-index:9999;animation:goalParticle 1s ease-out forwards';
+      el.style.setProperty('--dx',(Math.random()*200-100)+'px');
+      el.style.setProperty('--dy',(Math.random()*-150-30)+'px');
+      el.style.animationDelay=(Math.random()*0.15)+'s';
+      document.body.appendChild(el);
+      setTimeout(function(){if(el.parentNode)el.remove();},1200);
+    })(i);
+  }
+}
+
+// Patch showGoalAlert to fire explosion
+var _origShowGoalAlert=showGoalAlert;
+showGoalAlert=function(home,away,side,hg,ag){
+  _origShowGoalAlert(home,away,side,hg,ag);
+  goalExplosion(50,30);
+};
+
+// Also fire on admin score step
+var _origStepScore2=stepScore;
+stepScore=function(id,side,delta){
+  _origStepScore2(id,side,delta);
+  if(delta>0){
+    var btn=event&&event.target;
+    if(btn){var r=btn.getBoundingClientRect();goalExplosion((r.left/window.innerWidth)*100,(r.top/window.innerHeight)*100);}
+    else goalExplosion(50,50);
+  }
+};
+
+// ── NEXT KICKOFF COUNTDOWN ON LEADERBOARD ─────────────────
+function getNextKickoffHtml(){
+  var upcoming=matches.filter(function(m){return getMatchPhase(m)==='upcoming';})
+    .sort(function(a,b){var ka=parseMatchDateTime(a),kb=parseMatchDateTime(b);return (ka?ka.getTime():Infinity)-(kb?kb.getTime():Infinity);});
+  if(!upcoming.length)return '';
+  var m=upcoming[0];
+  var ko=parseMatchDateTime(m);
+  if(!ko)return '';
+  var diff=ko.getTime()-Date.now();
+  if(diff<0)return '';
+  var d=Math.floor(diff/86400000),h=Math.floor((diff%86400000)/3600000),mi=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
+  var timeStr=d>0?d+'d '+h+'h '+mi+'m':h>0?h+'h '+mi+'m '+s+'s':mi+'m '+s+'s';
+  return '<div class="next-kickoff-bar">⏰ Next: <strong>'+esc(m.home)+' vs '+esc(m.away)+'</strong> in '+timeStr+'</div>';
+}
+
+// ── OVERRIDE renderLeaderboard2 for all new features ──────
+var _prev_renderLeaderboard2=renderLeaderboard2;
+renderLeaderboard2=function(){
+  _prev_renderLeaderboard2();
+  var el=document.getElementById('tab-leaderboard');
+  if(!el)return;
+
+  // Inject next kickoff bar
+  var nkHtml=getNextKickoffHtml();
+  if(nkHtml){
+    var existing=el.querySelector('.next-kickoff-bar');
+    if(!existing) el.insertAdjacentHTML('afterbegin',nkHtml);
+  }
+
+  // Enhance lb-rows: add flags, sparklines, expand toggle, glow on rank-1
+  var lb=computeLeaderboard();
+  var rows=el.querySelectorAll('.lb-row');
+  rows.forEach(function(row,i){
+    if(i>=lb.length)return;
+    var entry=lb[i];
+    if(!entry)return;
+
+    // Glow on leader
+    if(i===0) row.classList.add('leader-glow');
+
+    // Add flags to team chips
+    var chips=row.querySelectorAll('.lb-team-chip');
+    if(chips[0]&&!chips[0].querySelector('.flag-emoji')){
+      var f1=flagFor(entry.team);
+      chips[0].insertAdjacentHTML('afterbegin','<span class="flag-emoji">'+f1+'</span>');
+    }
+    if(chips[1]&&!chips[1].querySelector('.flag-emoji')){
+      var f2=flagFor(entry.team2);
+      chips[1].insertAdjacentHTML('afterbegin','<span class="flag-emoji">'+f2+'</span>');
+    }
+
+    // Add sparkline to top row
+    var topRow=row.querySelector('.lb-top-row');
+    if(topRow&&!topRow.querySelector('svg')){
+      topRow.insertAdjacentHTML('beforeend',sparklineSVG(entry.name));
+    }
+
+    // Make row tappable to expand
+    if(!row.dataset.expandBound){
+      row.dataset.expandBound='1';
+      row.style.cursor='pointer';
+      row.addEventListener('click',function(e){
+        // Don't trigger if clicking a button/input
+        if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT')return;
+        toggleLbExpand(row,entry,lb,i);
+      });
+    }
+  });
+
+  updateBgGlow();
+  injectTicker();
+};
+
+function toggleLbExpand(row,entry,lb,rank){
+  var existing=row.nextSibling;
+  if(existing&&existing.classList&&existing.classList.contains('lb-expand')){
+    existing.remove();
+    row.classList.remove('lb-row-expanded');
+    return;
+  }
+  // Remove any other open expand
+  document.querySelectorAll('.lb-expand').forEach(function(e){e.remove();});
+  document.querySelectorAll('.lb-row-expanded').forEach(function(r){r.classList.remove('lb-row-expanded');});
+
+  row.classList.add('lb-row-expanded');
+  var p=pot();
+  var prizeHtml='';
+  if(rank<3) prizeHtml='<span class="expand-prize">🏆 '+fmt(p*PRIZE_SPLITS[rank].pct)+' prize</span>';
+
+  var div=document.createElement('div');
+  div.className='lb-expand';
+  div.innerHTML=''
+    +'<div class="expand-inner">'
+    +'<div class="expand-teams">'
+    +'<div class="expand-team"><span class="expand-flag">'+flagFor(entry.team)+'</span><span class="expand-tname">'+esc(entry.team)+'</span><span class="expand-tpts">'+entry.t1pts+' pts</span></div>'
+    +'<div class="expand-plus">+</div>'
+    +'<div class="expand-team"><span class="expand-flag">'+flagFor(entry.team2)+'</span><span class="expand-tname">'+esc(entry.team2)+'</span><span class="expand-tpts">'+entry.t2pts+' pts</span></div>'
+    +'</div>'
+    +'<div class="expand-stats">'
+    +'<span>GF: <strong>'+entry.gf+'</strong></span>'
+    +'<span>GA: <strong>'+entry.ga+'</strong></span>'
+    +'<span>GD: <strong>'+(entry.gd>=0?'+':'')+entry.gd+'</strong></span>'
+    +prizeHtml
+    +'</div>'
+    +'</div>';
+  row.insertAdjacentElement('afterend',div);
+}
+
+// ── START COUNTDOWN REFRESH ───────────────────────────────
+setInterval(function(){
+  if(currentTab==='leaderboard'){
+    var nk=document.querySelector('.next-kickoff-bar');
+    if(nk) nk.outerHTML=getNextKickoffHtml()||'';
+  }
+  injectTicker();
+},1000);
+
