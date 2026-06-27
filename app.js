@@ -663,7 +663,7 @@ function updateStatusBadge(){
 document.getElementById('api-badge').textContent='Loading\u2026';
 loadAll().then(function(){updateStatusBadge();renderLeaderboard();})
   .catch(function(e){console.error('Init failed:',e);document.getElementById('api-badge').textContent='DB error';document.getElementById('api-badge').className='badge err';renderLeaderboard();});
-setInterval(function(){loadAll().then(function(){updateStatusBadge();refreshCurrent();}).catch(function(){});},30000);
+setInterval(function(){loadAll().then(function(){updateStatusBadge();refreshCurrent();injectTicker();}).catch(function(){});},30000);
 
 // ============================================================
 // FEATURE ADDITIONS: WhatsApp, Countdown, Spinner, Toast, etc.
@@ -937,6 +937,7 @@ loadAll().then(function(){
   hideSpinner();
   updateStatusBadge();
   renderLeaderboard2();
+  injectTicker();
 }).catch(function(e){
   hideSpinner();
   console.error('Init failed:',e);
@@ -2676,24 +2677,37 @@ function toggleLbRow(name){
 // ── LIVE TICKER ──────────────────────────────────────────
 function buildTicker(){
   var live=matches.filter(function(m){return getMatchPhase(m)==='live';});
-  var finished=matches.filter(function(m){return getMatchPhase(m)==='finished';}).slice(-5);
+  var finished=matches.filter(function(m){return getMatchPhase(m)==='finished';})
+    .sort(function(a,b){var ka=parseMatchDateTime(a),kb=parseMatchDateTime(b);return (kb?kb.getTime():0)-(ka?ka.getTime():0);})
+    .slice(0,8);
+  var upcoming=matches.filter(function(m){return getMatchPhase(m)==='upcoming';})
+    .sort(function(a,b){var ka=parseMatchDateTime(a),kb=parseMatchDateTime(b);return (ka?ka.getTime():Infinity)-(kb?kb.getTime():Infinity);});
   var items=[];
   live.forEach(function(m){
-    items.push('🔴 LIVE: '+m.home+' '+m.home_goals+' – '+m.away_goals+' '+m.away);
+    items.push('\uD83D\uDD34 LIVE: '+m.home+' '+m.home_goals+' \u2013 '+m.away_goals+' '+m.away);
   });
   finished.forEach(function(m){
-    items.push('FT: '+m.home+' '+m.home_goals+' – '+m.away_goals+' '+m.away);
+    items.push('FT: '+m.home+' '+m.home_goals+' \u2013 '+m.away_goals+' '+m.away);
   });
-  var next=matches.filter(function(m){return getMatchPhase(m)==='upcoming';})
-    .sort(function(a,b){var ka=parseMatchDateTime(a),kb=parseMatchDateTime(b);return (ka?ka.getTime():Infinity)-(kb?kb.getTime():Infinity);});
-  if(next[0]) items.push('⏰ Next: '+next[0].home+' vs '+next[0].away+' · '+next[0].match_time+' BST');
-  return items.length?items.join('   •   '):null;
+  upcoming.slice(0,5).forEach(function(m){
+    items.push('\u23F0 Upcoming: '+m.home+' vs '+m.away+(m.match_date?' \u00b7 '+m.match_date:'')+(m.match_time?' '+m.match_time+' BST':''));
+  });
+  var lb=computeLeaderboard();
+  if(lb.length){
+    var medals=['\uD83E\uDD47','\uD83E\uDD48','\uD83E\uDD49'];
+    lb.slice(0,3).forEach(function(e,i){
+      items.push(medals[i]+' '+e.name+' \u2013 '+e.total+'pts');
+    });
+  }
+  var p=pot();
+  if(p>0) items.push('\uD83D\uDCB0 Prize pot: '+fmt(p));
+  return items.join('   \u2022   ');
 }
 
 function injectTicker(){
   var existing=document.getElementById('live-ticker');
   var tickerText=buildTicker();
-  if(!tickerText){if(existing)existing.remove();return;}
+  if(!tickerText) return;
   if(!existing){
     existing=document.createElement('div');
     existing.id='live-ticker';
