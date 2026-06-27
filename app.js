@@ -2704,22 +2704,50 @@ function buildTicker(){
   return items.join('   \u2022   ');
 }
 
+// ── RAF-BASED TICKER (smooth on all mobile browsers) ─────
+var _tickerRAF = null;
+var _tickerX = 0;
+var _tickerHalfW = 0;
+var _tickerInner = null;
+var _tickerSpeed = 0.6; // px per frame at 60fps
+
 function injectTicker(){
-  var tickerText=buildTicker();
+  var tickerText = buildTicker();
   if(!tickerText) return;
-  // Speed: ~80px per second, estimate 8px per char
-  var speed=Math.max(20, Math.round(tickerText.length*8/80));
-  var existing=document.getElementById('live-ticker');
-  if(!existing){
-    existing=document.createElement('div');
-    existing.id='live-ticker';
-    existing.className='live-ticker';
-    var header=document.querySelector('header');
-    if(header)header.insertAdjacentElement('afterend',existing);
+
+  var el = document.getElementById('live-ticker');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'live-ticker';
+    el.className = 'live-ticker';
+    var header = document.querySelector('header');
+    if(header) header.insertAdjacentElement('afterend', el);
   }
-  // Two identical copies inside .ticker-inner — animation moves -50% for seamless loop
-  var copy='<span class="ticker-copy">'+esc(tickerText)+'</span>';
-  existing.innerHTML='<div class="ticker-inner" style="animation-duration:'+speed+'s">'+copy+copy+'</div>';
+
+  // Build two copies for seamless loop
+  var escaped = esc(tickerText) + '        ';
+  el.innerHTML = '<div class="ticker-inner"><span class="ticker-copy">'+escaped+'</span><span class="ticker-copy">'+escaped+'</span></div>';
+  _tickerInner = el.querySelector('.ticker-inner');
+  _tickerX = 0;
+
+  // Wait for layout then get half-width and start RAF loop
+  requestAnimationFrame(function(){
+    if(!_tickerInner) return;
+    _tickerHalfW = _tickerInner.scrollWidth / 2;
+    if(_tickerRAF) cancelAnimationFrame(_tickerRAF);
+    _tickerLoop();
+  });
+}
+
+function _tickerLoop(){
+  if(!_tickerInner || !_tickerInner.parentNode){
+    _tickerRAF = null;
+    return;
+  }
+  _tickerX -= _tickerSpeed;
+  if(_tickerHalfW && _tickerX <= -_tickerHalfW) _tickerX = 0;
+  _tickerInner.style.transform = 'translateX(' + _tickerX.toFixed(2) + 'px)';
+  _tickerRAF = requestAnimationFrame(_tickerLoop);
 }
 
 // ── GRADIENT BACKGROUND BASED ON LEADER ──────────────────
