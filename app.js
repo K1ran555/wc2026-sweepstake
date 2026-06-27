@@ -2705,9 +2705,11 @@ function buildTicker(){
 }
 
 function injectTicker(){
-  var existing=document.getElementById('live-ticker');
   var tickerText=buildTicker();
   if(!tickerText) return;
+  // Speed: ~80px per second, estimate 8px per char
+  var speed=Math.max(20, Math.round(tickerText.length*8/80));
+  var existing=document.getElementById('live-ticker');
   if(!existing){
     existing=document.createElement('div');
     existing.id='live-ticker';
@@ -2715,7 +2717,9 @@ function injectTicker(){
     var header=document.querySelector('header');
     if(header)header.insertAdjacentElement('afterend',existing);
   }
-  existing.innerHTML='<div class="ticker-track"><span>'+esc(tickerText)+'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'+esc(tickerText)+'</span></div>';
+  // Two identical copies inside .ticker-inner — animation moves -50% for seamless loop
+  var copy='<span class="ticker-copy">'+esc(tickerText)+'</span>';
+  existing.innerHTML='<div class="ticker-inner" style="animation-duration:'+speed+'s">'+copy+copy+'</div>';
 }
 
 // ── GRADIENT BACKGROUND BASED ON LEADER ──────────────────
