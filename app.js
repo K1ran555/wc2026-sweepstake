@@ -953,39 +953,88 @@ loadAll().then(function(){
 function renderBracket(){
   var el=document.getElementById('tab-bracket');
   if(!el)return;
-  var ko=matches.filter(function(m){return m.stage!=='GROUP_STAGE';});
+
+  // Stage values as stored in DB
+  var STAGE_ORDER_DB=['Round of 32','Last 16','Quarter-final','Semi-final','3rd Place','Final'];
+  var STAGE_LABELS_DB={'Round of 32':'Round of 32','Last 16':'Last 16','Quarter-final':'Quarter-finals','Semi-final':'Semi-finals','3rd Place':'3rd Place','Final':'Final'};
+
+  var ko=matches.filter(function(m){
+    return m.stage==='Round of 32'||m.stage==='Last 16'||m.stage==='Quarter-final'
+      ||m.stage==='Semi-final'||m.stage==='Final'||m.stage==='3rd Place';
+  });
+
   if(!ko.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">\ud83c\udfc6</div><p>Knockout bracket will appear here once the Round of 32 begins.</p><p style="font-size:12px;color:var(--text-muted);margin-top:8px">Admin can add fixtures using the Admin tab.</p></div>';
+    el.innerHTML='<div class="empty"><div class="empty-icon">\ud83c\udfc6</div><p>Knockout bracket will appear here once the Round of 32 begins.</p></div>';
     return;
   }
-  var stages=['LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','FINAL','THIRD_PLACE'];
-  var stageNames={LAST_32:'Round of 32',LAST_16:'Round of 16',QUARTER_FINALS:'Quarter-finals',SEMI_FINALS:'Semi-finals',FINAL:'Final',THIRD_PLACE:'3rd Place'};
-  var html='<div class="bracket-wrap">';
-  stages.forEach(function(stage){
+
+  // Build bracket HTML — horizontal scrollable flowchart
+  var html='<div class="bkt-scroll"><div class="bkt-flow">';
+
+  // Rounds left to right (excluding 3rd place for main flow)
+  var mainStages=['Round of 32','Last 16','Quarter-final','Semi-final','Final'];
+  mainStages.forEach(function(stage,si){
     var ms=ko.filter(function(m){return m.stage===stage;});
     if(!ms.length)return;
-    html+='<div class="bracket-round"><div class="bracket-round-label">'+stageNames[stage]+'</div>';
+    html+='<div class="bkt-col">';
+    html+='<div class="bkt-col-label">'+STAGE_LABELS_DB[stage]+'</div>';
+    html+='<div class="bkt-col-matches">';
     ms.forEach(function(m){
       var phase=getMatchPhase(m);
       var done=phase==='finished';
       var live=phase==='live';
       var hWin=done&&m.home_goals>m.away_goals;
       var aWin=done&&m.away_goals>m.home_goals;
-      html+='<div class="bracket-match'+(live?' bracket-live':'')+'">'+
-        '<div class="bracket-team'+(hWin?' bracket-winner':'')+'">'+
-          '<span class="bracket-name">'+esc(m.home)+'</span>'+
-          (done?'<span class="bracket-score">'+m.home_goals+'</span>':'')+
-        '</div>'+
-        '<div class="bracket-team'+(aWin?' bracket-winner':'')+'">'+
-          '<span class="bracket-name">'+esc(m.away)+'</span>'+
-          (done?'<span class="bracket-score">'+m.away_goals+'</span>':'')+
-        '</div>'+
-        (live?'<div class="bracket-live-badge">\u25cf LIVE</div>':'')+
+      var pending=!done&&!live;
+      html+='<div class="bkt-match'+(live?' bkt-live':done?' bkt-done':' bkt-upcoming')+'">';
+      // Home team
+      html+='<div class="bkt-team'+(hWin?' bkt-winner':aWin?' bkt-loser':'')+'">'+
+        '<span class="bkt-flag">'+flagFor(m.home)+'</span>'+
+        '<span class="bkt-tname">'+esc(m.home)+'</span>'+
+        (done?'<span class="bkt-sc bkt-sc-'+(hWin?'w':'l')+'">'+m.home_goals+'</span>':
+         live?'<span class="bkt-sc bkt-live-dot">\u2022</span>':'<span class="bkt-vs">v</span>')+
       '</div>';
+      // Away team
+      html+='<div class="bkt-team'+(aWin?' bkt-winner':hWin?' bkt-loser':'')+'">'+
+        '<span class="bkt-flag">'+flagFor(m.away)+'</span>'+
+        '<span class="bkt-tname">'+esc(m.away)+'</span>'+
+        (done?'<span class="bkt-sc bkt-sc-'+(aWin?'w':'l')+'">'+m.away_goals+'</span>':
+         live?'<span class="bkt-sc bkt-live-dot">\u2022</span>':'')+
+      '</div>';
+      if(live) html+='<div class="bkt-live-badge">\u25cf LIVE</div>';
+      if(pending&&m.match_date) html+='<div class="bkt-date">'+esc(m.match_date)+' '+esc(m.match_time||'')+'</div>';
+      html+='</div>'; // bkt-match
     });
-    html+='</div>';
+    html+='</div></div>'; // bkt-col-matches, bkt-col
   });
-  html+='</div>';
+
+  html+='</div></div>'; // bkt-flow, bkt-scroll
+
+  // 3rd place play-off separate
+  var third=ko.filter(function(m){return m.stage==='3rd Place';});
+  if(third.length){
+    var m=third[0];
+    var phase=getMatchPhase(m);
+    var done=phase==='finished';
+    var live=phase==='live';
+    var hWin=done&&m.home_goals>m.away_goals;
+    var aWin=done&&m.away_goals>m.home_goals;
+    html+='<div class="bkt-third"><div class="bkt-third-label">\ud83e\udd49 3rd Place</div>';
+    html+='<div class="bkt-match'+(live?' bkt-live':done?' bkt-done':' bkt-upcoming')+'" style="max-width:280px;margin:0 auto">';
+    html+='<div class="bkt-team'+(hWin?' bkt-winner':'')+'"><span class="bkt-flag">'+flagFor(m.home)+'</span><span class="bkt-tname">'+esc(m.home)+'</span>'+(done?'<span class="bkt-sc bkt-sc-'+(hWin?'w':'l')+'">'+m.home_goals+'</span>':'')+'</div>';
+    html+='<div class="bkt-team'+(aWin?' bkt-winner':'')+'"><span class="bkt-flag">'+flagFor(m.away)+'</span><span class="bkt-tname">'+esc(m.away)+'</span>'+(done?'<span class="bkt-sc bkt-sc-'+(aWin?'w':'l')+'">'+m.away_goals+'</span>':'')+'</div>';
+    if(live) html+='<div class="bkt-live-badge">\u25cf LIVE</div>';
+    html+='</div></div>';
+  }
+
+  // Find winner
+  var fin=ko.filter(function(m){return m.stage==='Final'&&getMatchPhase(m)==='finished';});
+  if(fin.length){
+    var f=fin[0];
+    var champ=f.home_goals>f.away_goals?f.home:f.away;
+    html+='<div class="bkt-champion"><div class="bkt-champ-trophy">\ud83c\udfc6</div><div class="bkt-champ-name">'+flagFor(champ)+' '+esc(champ)+'</div><div class="bkt-champ-label">World Cup 2026 Champions</div></div>';
+  }
+
   el.innerHTML=html;
 }
 
@@ -3246,7 +3295,7 @@ showTab=function(tab,btn){
 
 // ── WHAT'S NEW POPUP ──────────────────────────────────────
 (function(){
-  var VERSION = 'v2.0-refinements';
+  var VERSION = 'v2.1-bracket';
   var SEEN_KEY = 'wc26_seen_'+VERSION;
   if(localStorage.getItem(SEEN_KEY)) return;
 
@@ -3266,6 +3315,7 @@ showTab=function(tab,btn){
           '<div class="wn-item"><span class="wn-icon">\uD83C\uDFAF</span><div><strong>Who to beat</strong><div class="wn-desc">See exactly how many points you need to overtake the people above you.</div></div></div>',
           '<div class="wn-item"><span class="wn-icon">\uD83D\uDDE3\uFE0F</span><div><strong>Banter wall</strong><div class="wn-desc">Post trash talk on the My Teams tab. Everyone can see it.</div></div></div>',
           '<div class="wn-item"><span class="wn-icon">\u26A1</span><div><strong>Smarter predictions</strong><div class="wn-desc">Stage multipliers (Final = 4\u00d7), exact score bonus (+2), and upset bonus (+1).</div></div></div>',
+          '<div class="wn-item"><span class="wn-icon">\uD83C\uDFDE\uFE0F</span><div><strong>Visual bracket</strong><div class="wn-desc">The Bracket tab now shows a full scrollable flowchart of team progression from R32 to the Final, with live indicators and scores.</div></div></div>',
           '<div class="wn-item"><span class="wn-icon">\uD83D\uDCF2</span><div><strong>Install as app</strong><div class="wn-desc">Tap the \uD83D\uDCF2 button in the header to add to your home screen.</div></div></div>',
           '<div class="wn-item"><span class="wn-icon">\uD83D\uDEEB</span><div><strong>Works offline</strong><div class="wn-desc">The app now loads even with no signal and syncs when you\'re back online.</div></div></div>',
         '</div>',

@@ -1571,3 +1571,150 @@ body {
   text-align: center;
 }
 #whats-new-btn:hover { opacity: 0.9; }
+
+/* ── VISUAL BRACKET FLOWCHART ─────────────────────────── */
+.bkt-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 16px;
+}
+.bkt-flow {
+  display: flex;
+  gap: 0;
+  min-width: max-content;
+  padding: 16px 8px;
+  align-items: flex-start;
+}
+.bkt-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 160px;
+  position: relative;
+}
+.bkt-col + .bkt-col::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 40px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  opacity: 0.4;
+}
+.bkt-col-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0 12px 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+.bkt-col-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 6px;
+  width: 100%;
+}
+.bkt-match {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-width: 148px;
+  position: relative;
+}
+.bkt-match.bkt-live {
+  border-color: var(--green-border);
+  box-shadow: 0 0 0 1px var(--green-border);
+}
+.bkt-match.bkt-done {
+  background: var(--surface-2);
+}
+.bkt-match.bkt-upcoming {
+  opacity: 0.75;
+}
+.bkt-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.bkt-team:first-of-type {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+}
+.bkt-team.bkt-winner {
+  background: rgba(201,168,76,0.1);
+  font-weight: 700;
+  color: var(--gold);
+}
+.bkt-team.bkt-loser {
+  opacity: 0.45;
+}
+.bkt-flag { font-size: 14px; flex-shrink: 0; }
+.bkt-tname {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bkt-sc {
+  font-size: 13px;
+  font-weight: 800;
+  flex-shrink: 0;
+  min-width: 18px;
+  text-align: right;
+}
+.bkt-sc-w { color: var(--gold); }
+.bkt-sc-l { color: var(--text-muted); }
+.bkt-vs { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.bkt-live-dot { color: var(--green); animation: pulseLive 1.2s ease-in-out infinite; }
+.bkt-live-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--green);
+  text-align: right;
+  margin-top: 3px;
+  letter-spacing: 0.05em;
+}
+.bkt-date {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* 3rd place */
+.bkt-third {
+  margin: 20px 8px 0;
+  text-align: center;
+}
+.bkt-third-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+/* Champion banner */
+.bkt-champion {
+  margin: 24px 8px 8px;
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04));
+  border: 1px solid rgba(201,168,76,0.3);
+  border-radius: 16px;
+  animation: fadeIn 0.6s ease;
+}
+.bkt-champ-trophy { font-size: 48px; margin-bottom: 8px; }
+.bkt-champ-name { font-size: 22px; font-weight: 800; color: var(--gold); margin-bottom: 4px; }
+.bkt-champ-label { font-size: 12px; color: var(--text-muted); }
+
