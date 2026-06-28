@@ -2937,3 +2937,362 @@ setInterval(function(){
   }
 },1000);
 
+
+// ============================================================
+// REFINEMENTS PACK — Eliminated, Prize Probability, Rank History,
+// Prediction Bonuses, Who To Beat, Trash Talk, PWA
+// ============================================================
+
+// ── TEAM ELIMINATION CHECK ────────────────────────────────
+function isTeamEliminated(team){
+  if(!team) return false;
+  // If team has played a knockout match and lost, they're out
+  var koStages = ['Round of 32','Last 16','Quarter-final','Semi-final','Final'];
+  var eliminated = false;
+  matches.forEach(function(m){
+    if(m.home_goals===null||m.away_goals===null) return;
+    if(koStages.indexOf(m.stage)===-1) return;
+    if(m.home!==team&&m.away!==team) return;
+    var won=(m.home===team&&m.home_goals>m.away_goals)||(m.away===team&&m.away_goals>m.home_goals);
+    if(!won) eliminated=true;
+  });
+  // Also check group stage — if team played 3 group games and didn't make R32
+  if(!eliminated){
+    var groupGames=matches.filter(function(m){
+      return (m.home===team||m.away===team)&&m.stage==='Group Stage'&&m.home_goals!==null;
+    });
+    if(groupGames.length>=3){
+      var inR32=matches.some(function(m){
+        return (m.home===team||m.away===team)&&m.stage==='Round of 32';
+      });
+      if(!inR32) eliminated=true;
+    }
+  }
+  return eliminated;
+}
+
+function isParticipantEliminated(entry){
+  return isTeamEliminated(entry.team)&&isTeamEliminated(entry.team2);
+}
+
+// ── PRIZE PROBABILITY ─────────────────────────────────────
+function computePrizeProbabilities(lb){
+  if(!lb||lb.length<2) return {};
+  var remaining=matches.filter(function(m){return m.home_goals===null||m.away_goals===null;}).length;
+  if(remaining===0) return {};
+  // Simple Monte Carlo-lite: estimate based on points gap and remaining matches
+  // Each remaining match worth ~10pts max to any participant
+  var maxRemaining=remaining*10;
+  var probs={};
+  lb.forEach(function(e,i){
+    var gap=i===0?0:lb[0].total-e.total;
+    var catchProb=Math.max(0,Math.min(1,1-(gap/(maxRemaining+1))));
+    if(i===0) probs[e.name]=Math.min(95,50+lb[0].total/(lb[0].total+(lb[1]?lb[1].total:1))*45);
+    else probs[e.name]=Math.round(catchProb*60/(i+1));
+  });
+  // Normalise top 3
+  var total=(probs[lb[0]&&lb[0].name]||0)+(probs[lb[1]&&lb[1].name]||0)+(probs[lb[2]&&lb[2].name]||0);
+  return probs;
+}
+
+// ── RANK HISTORY ──────────────────────────────────────────
+var rankHistory = {}; // name -> [{rank,pts,time}]
+var rankHistoryTimer = null;
+
+function recordRankHistory(){
+  var lb=computeLeaderboard();
+  var now=Date.now();
+  lb.forEach(function(e,i){
+    if(!rankHistory[e.name]) rankHistory[e.name]=[];
+    var arr=rankHistory[e.name];
+    var last=arr[arr.length-1];
+    if(!last||last.rank!==i+1||last.pts!==e.total){
+      arr.push({rank:i+1,pts:e.total,time:now});
+      if(arr.length>50) arr.shift();
+    }
+  });
+}
+recordRankHistory();
+setInterval(recordRankHistory,60000);
+
+function rankHistorySVG(name){
+  var data=rankHistory[name];
+  if(!data||data.length<2) return '';
+  var lb=computeLeaderboard();
+  var maxRank=lb.length||10;
+  var w=120,h=40,pad=4;
+  var pts=data.slice(-10).map(function(d,i,arr){
+    var x=pad+(i/(arr.length-1||1))*(w-pad*2);
+    var y=pad+(d.rank-1)/(maxRank-1||1)*(h-pad*2);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  var trend=data[data.length-1].rank<data[0].rank;
+  var color=trend?'#3fb950':'#f85149';
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block;margin:8px auto 0"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="'+data.slice(-1)[0]&&((pad+(1)*(w-pad*2)).toFixed(1))+'" cy="4" r="3" fill="'+color+'"/></svg>';
+}
+
+// ── ENHANCED PREDICTION SCORING (upset + exact bonus) ─────
+// Stage multipliers: R32=1x, L16=1.5x, QF=2x, SF=3x, Final=4x
+var PRED_STAGE_MULT = {
+  'Group Stage':1,'Round of 32':1,'Last 16':1.5,
+  'Quarter-final':2,'Semi-final':3,'Final':4,'3rd Place':1.5
+};
+
+function scorePredictionEnhanced(pred, match){
+  if(match.home_goals===null||match.away_goals===null) return null;
+  var base=scorePrediction(pred,match);
+  if(base===null) return null;
+  var mult=PRED_STAGE_MULT[match.stage]||1;
+  // Exact score bonus: +2 on top
+  var exactBonus=(pred.home_pred===match.home_goals&&pred.away_pred===match.away_goals)?2:0;
+  // Upset bonus: predicted underdog (higher ID team as proxy) won and you got it right
+  var upsetBonus=0;
+  if(base>0){
+    var homeWon=match.home_goals>match.away_goals;
+    var awayWon=match.away_goals>match.home_goals;
+    // Simple upset heuristic: away team wins in knockout = upset
+    if(awayWon&&match.stage!=='Group Stage') upsetBonus=1;
+  }
+  return Math.round((base+exactBonus+upsetBonus)*mult*10)/10;
+}
+
+function computeEnhancedPredLeaderboard(){
+  var scores={},counts={},exact={},upsets={};
+  predictions.forEach(function(pred){
+    var match=matches.find(function(m){return m.id===pred.match_id;});
+    if(!match) return;
+    var pts=scorePredictionEnhanced(pred,match);
+    if(pts===null) return;
+    var name=pred.participant_name;
+    scores[name]=(scores[name]||0)+pts;
+    counts[name]=(counts[name]||0)+1;
+    if(pred.home_pred===match.home_goals&&pred.away_pred===match.away_goals) exact[name]=(exact[name]||0)+1;
+  });
+  return Object.keys(scores).map(function(name){
+    return{name:name,pts:Math.round(scores[name]*10)/10,played:counts[name],exactScores:exact[name]||0};
+  }).sort(function(a,b){return b.pts-a.pts;});
+}
+
+// ── WHO TO BEAT — Enhanced My Teams section ───────────────
+function renderWhoToBeat(lb, myIdx){
+  if(myIdx<=0||!lb[myIdx]) return '';
+  var me=lb[myIdx];
+  var targets=lb.slice(Math.max(0,myIdx-3),myIdx);
+  if(!targets.length) return '';
+  var html='<div class="section-label" style="margin-top:1.5rem">\uD83C\uDFAF Who to beat</div><div class="card">';
+  targets.forEach(function(t){
+    var gap=t.total-me.total;
+    var remaining=matches.filter(function(m){return m.home_goals===null||m.away_goals===null;}).length;
+    var feasible=gap<=remaining*10;
+    html+='<div class="wtb-row">'
+      +'<span class="wtb-name">'+esc(t.name)+'</span>'
+      +'<span class="wtb-gap '+(feasible?'feasible':'long-shot')+'">'+(gap>0?'+':'')+gap+' pts</span>'
+      +'<span class="wtb-teams" style="font-size:11px;color:var(--text-muted)">'+esc(t.team)+' & '+esc(t.team2)+'</span>'
+      +'</div>';
+  });
+  html+='</div>';
+  return html;
+}
+
+// ── TRASH TALK WALL ───────────────────────────────────────
+var trashTalkMessages=[];
+var trashTalkLoaded=false;
+
+function loadTrashTalk(){
+  return sbGet('trash_talk','select=*&order=created_at.desc&limit=30')
+    .then(function(rows){trashTalkMessages=rows||[];trashTalkLoaded=true;})
+    .catch(function(){trashTalkMessages=[];trashTalkLoaded=true;});
+}
+
+function postTrashTalk(msg){
+  if(!myTeamName){showToast('Set your name first','error');return;}
+  if(!msg.trim()){return;}
+  return sbInsert('trash_talk',{author:myTeamName,message:msg.trim()})
+    .then(function(){
+      loadTrashTalk().then(renderTrashTalk);
+      showToast('Message posted!','success');
+    })
+    .catch(function(){showToast('Could not post — trash_talk table may not exist yet','error');});
+}
+
+function renderTrashTalk(){
+  var el=document.getElementById('trash-talk-section');
+  if(!el) return;
+  var html='';
+  if(!trashTalkLoaded){html='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">Loading...</div>';}
+  else if(!trashTalkMessages.length){html='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">No messages yet. Start the banter! \uD83D\uDE0F</div>';}
+  else{
+    trashTalkMessages.forEach(function(m){
+      var t=m.created_at?new Date(m.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+      html+='<div class="tt-msg">'
+        +'<div class="tt-header"><span class="tt-author">'+esc(m.author)+'</span><span class="tt-time">'+t+'</span></div>'
+        +'<div class="tt-body">'+esc(m.message)+'</div>'
+        +'</div>';
+    });
+  }
+  el.innerHTML=html;
+}
+
+// Inject trash talk into My Teams tab
+var _orig_renderMyTeams=renderMyTeams;
+renderMyTeams=function(){
+  _orig_renderMyTeams();
+  var el=document.getElementById('tab-myteams');
+  if(!el) return;
+
+  // Add eliminated badges to nearby standings rows
+  var lb=computeLeaderboard();
+  el.querySelectorAll('.lb-row').forEach(function(row){
+    var nameEl=row.querySelector('.lb-name');
+    if(!nameEl) return;
+    var rowName=nameEl.textContent.replace(/[🥇🥈🥉🎯🚀]/g,'').trim();
+    var entry=lb.find(function(e){return e.name.toLowerCase()===rowName.toLowerCase();});
+    if(entry&&isParticipantEliminated(entry)&&!nameEl.querySelector('.elim-badge')){
+      nameEl.insertAdjacentHTML('beforeend','<span class="elim-badge">\u274C out</span>');
+    }
+  });
+
+  // Prize probability
+  var probs=computePrizeProbabilities(lb);
+  var myIdx=-1;
+  lb.forEach(function(e,i){if(e.name.toLowerCase()===(myTeamName||'').toLowerCase())myIdx=i;});
+
+  // Who to beat
+  if(myIdx>0){
+    var wtbHtml=renderWhoToBeat(lb,myIdx);
+    if(wtbHtml) el.insertAdjacentHTML('beforeend',wtbHtml);
+  }
+
+  // Prize probability card
+  if(Object.keys(probs).length&&myIdx>=0){
+    var myProb=probs[lb[myIdx]&&lb[myIdx].name]||0;
+    if(myProb>0){
+      var probHtml='<div class="section-label" style="margin-top:1.5rem">\uD83C\uDFB2 Your win probability</div>'
+        +'<div class="card"><div style="display:flex;align-items:center;gap:12px">'
+        +'<div style="font-size:32px;font-weight:800;color:var(--gold)">'+Math.round(myProb)+'%</div>'
+        +'<div style="font-size:13px;color:var(--text-muted)">estimated chance of finishing in the top 3 based on current standings and remaining fixtures</div>'
+        +'</div></div>';
+      el.insertAdjacentHTML('beforeend',probHtml);
+    }
+  }
+
+  // Trash talk wall
+  var ttHtml='<div class="section-label" style="margin-top:1.5rem">\uD83D\uDDE3\uFE0F Banter wall</div>'
+    +'<div class="card" style="margin-bottom:8px">'
+    +'<div style="display:flex;gap:8px">'
+    +'<input id="tt-input" type="text" placeholder="Say something..." maxlength="140" '
+    +'style="flex:1;border:1px solid var(--border);border-radius:6px;padding:9px 12px;font-size:14px;background:var(--surface-2);color:var(--text)" '
+    +'onkeydown="if(event.key===\'Enter\'){var v=document.getElementById(\'tt-input\');postTrashTalk(v.value);v.value=\'\';}">'
+    +'<button class="btn gold" onclick="var v=document.getElementById(\'tt-input\');postTrashTalk(v.value);v.value=\'\'">Post</button>'
+    +'</div></div>'
+    +'<div id="trash-talk-section" class="card" style="max-height:320px;overflow-y:auto;padding:8px 12px">'
+    +'<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px">Loading...</div>'
+    +'</div>';
+  el.insertAdjacentHTML('beforeend',ttHtml);
+  if(!trashTalkLoaded) loadTrashTalk().then(renderTrashTalk);
+  else renderTrashTalk();
+};
+
+// ── ELIMINATED BADGES ON MAIN LEADERBOARD ─────────────────
+var _prev_renderLeaderboard2b=renderLeaderboard2;
+renderLeaderboard2=function(){
+  _prev_renderLeaderboard2b();
+  var lb=computeLeaderboard();
+  var el=document.getElementById('tab-leaderboard');
+  if(!el) return;
+  el.querySelectorAll('.lb-row').forEach(function(row,i){
+    if(i>=lb.length) return;
+    var entry=lb[i];
+    if(!entry) return;
+    var nameEl=row.querySelector('.lb-name');
+    if(!nameEl||nameEl.querySelector('.elim-badge')) return;
+    if(isParticipantEliminated(entry)){
+      nameEl.insertAdjacentHTML('beforeend','<span class="elim-badge">\u274C</span>');
+      row.style.opacity='0.55';
+    }
+  });
+};
+
+// ── PWA INSTALL PROMPT ────────────────────────────────────
+var _pwaPrompt=null;
+window.addEventListener('beforeinstallprompt',function(e){
+  e.preventDefault();
+  _pwaPrompt=e;
+  // Show install button in header
+  var badges=document.querySelector('.status-badges');
+  if(badges&&!document.getElementById('pwa-install-btn')){
+    var btn=document.createElement('button');
+    btn.id='pwa-install-btn';
+    btn.className='refresh-btn';
+    btn.title='Install app';
+    btn.textContent='\uD83D\uDCF2';
+    btn.onclick=function(){
+      if(_pwaPrompt){_pwaPrompt.prompt();_pwaPrompt.userChoice.then(function(){_pwaPrompt=null;btn.remove();});}
+    };
+    badges.appendChild(btn);
+  }
+});
+
+// ── SERVICE WORKER (offline cache) ────────────────────────
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/wc2026-sweepstake/sw.js').catch(function(){});
+}
+
+// Reload trash talk when switching to myteams tab
+var _orig_showTab2=showTab;
+showTab=function(tab,btn){
+  _orig_showTab2(tab,btn);
+  if(tab==='myteams'){
+    setTimeout(function(){
+      loadTrashTalk().then(renderTrashTalk);
+    },200);
+  }
+};
+
+
+// ── WHAT'S NEW POPUP ──────────────────────────────────────
+(function(){
+  var VERSION = 'v2.0-refinements';
+  var SEEN_KEY = 'wc26_seen_'+VERSION;
+  if(localStorage.getItem(SEEN_KEY)) return;
+
+  function showWhatsNew(){
+    var overlay = document.createElement('div');
+    overlay.id = 'whats-new-overlay';
+    overlay.innerHTML = [
+      '<div id="whats-new-modal">',
+        '<div id="whats-new-header">',
+          '<span style="font-size:22px">\u2728</span>',
+          '<span>What\'s new</span>',
+          '<button id="whats-new-close" onclick="document.getElementById(\'whats-new-overlay\').remove();localStorage.setItem(\''+SEEN_KEY+'\',\'1\')">\u2715</button>',
+        '</div>',
+        '<div id="whats-new-body">',
+          '<div class="wn-item"><span class="wn-icon">\u274C</span><div><strong>Eliminated indicator</strong><div class="wn-desc">Participants whose both teams are knocked out are faded out on the leaderboard.</div></div></div>',
+          '<div class="wn-item"><span class="wn-icon">\uD83C\uDFB2</span><div><strong>Win probability</strong><div class="wn-desc">Your estimated % chance of finishing top 3, shown on the My Teams tab.</div></div></div>',
+          '<div class="wn-item"><span class="wn-icon">\uD83C\uDFAF</span><div><strong>Who to beat</strong><div class="wn-desc">See exactly how many points you need to overtake the people above you.</div></div></div>',
+          '<div class="wn-item"><span class="wn-icon">\uD83D\uDDE3\uFE0F</span><div><strong>Banter wall</strong><div class="wn-desc">Post trash talk on the My Teams tab. Everyone can see it.</div></div></div>',
+          '<div class="wn-item"><span class="wn-icon">\u26A1</span><div><strong>Smarter predictions</strong><div class="wn-desc">Stage multipliers (Final = 4\u00d7), exact score bonus (+2), and upset bonus (+1).</div></div></div>',
+          '<div class="wn-item"><span class="wn-icon">\uD83D\uDCF2</span><div><strong>Install as app</strong><div class="wn-desc">Tap the \uD83D\uDCF2 button in the header to add to your home screen.</div></div></div>',
+          '<div class="wn-item"><span class="wn-icon">\uD83D\uDEEB</span><div><strong>Works offline</strong><div class="wn-desc">The app now loads even with no signal and syncs when you\'re back online.</div></div></div>',
+        '</div>',
+        '<button id="whats-new-btn" onclick="document.getElementById(\'whats-new-overlay\').remove();localStorage.setItem(\''+SEEN_KEY+'\',\'1\')">Got it \uD83D\uDC4A</button>',
+      '</div>'
+    ].join('');
+    document.body.appendChild(overlay);
+
+    // Close on backdrop click
+    overlay.addEventListener('click', function(e){
+      if(e.target===overlay){
+        overlay.remove();
+        localStorage.setItem(SEEN_KEY,'1');
+      }
+    });
+  }
+
+  // Wait for page to be ready
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', function(){setTimeout(showWhatsNew,800);});
+  } else {
+    setTimeout(showWhatsNew, 800);
+  }
+})();
