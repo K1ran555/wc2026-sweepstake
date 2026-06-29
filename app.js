@@ -180,11 +180,11 @@ function getTeamScore(team, tables){
     koGf += (m.home===team)?hg:ag;
     koGa += (m.home===team)?ag:hg;
     if(stageKey==='FINAL'){
-      if((m.home===team&&hg>ag)||(m.away===team&&ag>hg)) bonus=Math.max(bonus,100);
-      else bonus=Math.max(bonus,70);
+      if((m.home===team&&hg>ag)||(m.away===team&&ag>hg)) bonus+=100;
+      else bonus+=70;
     } else {
       var won=(m.home===team&&hg>ag)||(m.away===team&&ag>hg);
-      if(won) bonus=Math.max(bonus,STAGE_BONUS[stageKey]||0);
+      if(won) bonus+=(STAGE_BONUS[stageKey]||0);
     }
   });
   return {grpPts:row.pts,bonus:bonus,total:row.pts+bonus,gf:row.gf+koGf,ga:row.ga+koGa};
