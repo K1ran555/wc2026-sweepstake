@@ -631,6 +631,7 @@ function updateStatusBadge(){
   if(live){badge.textContent='\u25cf '+live+' live';badge.className='badge live';}
   else if(ft){badge.textContent=ft+' results';badge.className='badge';}
   else{badge.textContent='No scores yet';badge.className='badge';}
+  var potEl=document.getElementById('pot-amount');if(potEl)potEl.textContent=fmt(pot());
 }
 
 // ── COUNTDOWN ─────────────────────────────────────────────
