@@ -29,9 +29,13 @@ var STAGE_BONUS = {GROUP_STAGE:0,LAST_32:10,LAST_16:20,QUARTER_FINALS:35,SEMI_FI
 
 // Map DB stage strings to internal keys for bonus lookup
 var STAGE_DB_MAP = {
-  'Group Stage':'GROUP_STAGE','Round of 32':'LAST_32','Last 16':'LAST_16',
-  'Quarter-final':'QUARTER_FINALS','Semi-final':'SEMI_FINALS',
-  '3rd Place':'THIRD_PLACE','Final':'FINAL'
+  'Group Stage':'GROUP_STAGE','GROUP_STAGE':'GROUP_STAGE',
+  'Round of 32':'LAST_32','LAST_32':'LAST_32',
+  'Last 16':'LAST_16','LAST_16':'LAST_16',
+  'Quarter-final':'QUARTER_FINALS','QUARTER_FINALS':'QUARTER_FINALS',
+  'Semi-final':'SEMI_FINALS','SEMI_FINALS':'SEMI_FINALS',
+  '3rd Place':'THIRD_PLACE','THIRD_PLACE':'THIRD_PLACE',
+  'Final':'FINAL','FINAL':'FINAL'
 };
 
 var PRIZE_SPLITS = [
@@ -103,7 +107,7 @@ function parseMatchDateTime(m){
   return new Date(Date.UTC(TOURNAMENT_YEAR, month, day, hour-1, min));
 }
 function getMatchPhase(m){
-  if(m.home_goals!==null && m.away_goals!==null){
+  if(m.home_goals!==null && m.home_goals!==undefined && m.away_goals!==null && m.away_goals!==undefined){
     var ko = parseMatchDateTime(m);
     if(!ko) return 'finished';
     var stageKey = STAGE_DB_MAP[m.stage]||'GROUP_STAGE';
@@ -152,8 +156,9 @@ function computeGroupTables(){
   matches.forEach(function(m){
     var stageKey = STAGE_DB_MAP[m.stage]||m.stage;
     if(stageKey!=='GROUP_STAGE') return;
-    if(m.home_goals===null||m.away_goals===null) return;
-    var h=m.home,a=m.away,hg=m.home_goals,ag=m.away_goals;
+    if(m.home_goals===null||m.home_goals===undefined||m.away_goals===null||m.away_goals===undefined) return;
+    var h=m.home,a=m.away,hg=parseInt(m.home_goals,10),ag=parseInt(m.away_goals,10);
+    if(isNaN(hg)||isNaN(ag)) return;
     var gh=teamGroup(h),ga=teamGroup(a);
     if(t[gh]&&t[gh][h]){ t[gh][h].p++; t[gh][h].gf+=hg; t[gh][h].ga+=ag; if(hg>ag){t[gh][h].w++;t[gh][h].pts+=3;}else if(hg===ag){t[gh][h].d++;t[gh][h].pts++;}else t[gh][h].l++; }
     if(t[ga]&&t[ga][a]){ t[ga][a].p++; t[ga][a].gf+=ag; t[ga][a].ga+=hg; if(ag>hg){t[ga][a].w++;t[ga][a].pts+=3;}else if(ag===hg){t[ga][a].d++;t[ga][a].pts++;}else t[ga][a].l++; }
@@ -167,10 +172,11 @@ function getTeamScore(team, tables){
   var bonus=0, koGf=0, koGa=0;
   matches.forEach(function(m){
     if(m.home!==team&&m.away!==team) return;
-    if(m.home_goals===null||m.away_goals===null) return;
+    if(m.home_goals===null||m.home_goals===undefined||m.away_goals===null||m.away_goals===undefined) return;
     var stageKey = STAGE_DB_MAP[m.stage]||m.stage;
     if(stageKey==='GROUP_STAGE') return;
-    var hg=m.home_goals, ag=m.away_goals;
+    var hg=parseInt(m.home_goals,10), ag=parseInt(m.away_goals,10);
+    if(isNaN(hg)||isNaN(ag)) return;
     koGf += (m.home===team)?hg:ag;
     koGa += (m.home===team)?ag:hg;
     if(stageKey==='FINAL'){
