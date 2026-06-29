@@ -183,8 +183,8 @@ function getTeamScore(team, tables){
       if((m.home===team&&hg>ag)||(m.away===team&&ag>hg)) bonus+=100;
       else bonus+=70;
     } else {
-      var won=(m.home===team&&hg>ag)||(m.away===team&&ag>hg);
-      if(won) bonus+=(STAGE_BONUS[stageKey]||0);
+      // Bonus for appearing in this stage regardless of result
+      bonus+=(STAGE_BONUS[stageKey]||0);
     }
   });
   return {grpPts:row.pts,bonus:bonus,total:row.pts+bonus,gf:row.gf+koGf,ga:row.ga+koGa};
