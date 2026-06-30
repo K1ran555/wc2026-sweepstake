@@ -306,7 +306,8 @@ function matchCard(m, type){
   var isDrawn = type==='ft' && m.home_goals===m.away_goals;
   var penSuffix = (isDrawn && m.penalties_winner) ? ' <span class="pen-result">('+esc(m.penalties_winner)+' won on pens)</span>' : '';
   var scoreHtml = type==='ns' ? '<span class="match-score vs">vs</span>' : '<span class="match-score">'+m.home_goals+' \u2013 '+m.away_goals+'</span>';
-  var stageLbl = m.stage||'';
+  var STAGE_DISPLAY={'GROUP_STAGE':'Group Stage','LAST_32':'Round of 32','LAST_16':'Last 16','QUARTER_FINALS':'Quarter-final','SEMI_FINALS':'Semi-final','THIRD_PLACE':'3rd Place','FINAL':'Final'};
+  var stageLbl = STAGE_DISPLAY[m.stage]||m.stage||'';
   var ownersHtml = (ho||ao) ? '<div class="match-owners"><span>'+(ho?'\uD83D\uDC64 '+esc(ho):'')+'</span><span>'+(ao?'\uD83D\uDC64 '+esc(ao):'')+'</span></div>' : '';
   return '<div class="match-card'+(type==='live'?' is-live':'')+'">'
     +'<div class="match-teams"><span class="match-team">'+esc(m.home)+'</span>'+scoreHtml+'<span class="match-team away">'+esc(m.away)+'</span></div>'
