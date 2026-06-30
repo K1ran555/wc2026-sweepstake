@@ -180,7 +180,8 @@ function getTeamScore(team, tables){
     koGf += (m.home===team)?hg:ag;
     koGa += (m.home===team)?ag:hg;
     if(stageKey==='FINAL'){
-      if((m.home===team&&hg>ag)||(m.away===team&&ag>hg)) bonus+=100;
+      var finalWinner = (hg===ag) ? m.penalties_winner : (hg>ag ? m.home : m.away);
+      if(finalWinner===team) bonus+=100;
       else bonus+=70;
     } else {
       // Bonus for appearing in this stage regardless of result
@@ -302,12 +303,15 @@ function renderScores(){
 function matchCard(m, type){
   var ho=ownerOfTeam(m.home), ao=ownerOfTeam(m.away);
   var pill = type==='live'?'<span class="pill pill-live">\u25cf Live</span>':type==='ft'?'<span class="pill pill-ft">FT</span>':'<span class="pill pill-ns">Upcoming</span>';
+  var isDrawn = type==='ft' && m.home_goals===m.away_goals;
+  var penSuffix = (isDrawn && m.penalties_winner) ? ' <span class="pen-result">('+esc(m.penalties_winner)+' won on pens)</span>' : '';
   var scoreHtml = type==='ns' ? '<span class="match-score vs">vs</span>' : '<span class="match-score">'+m.home_goals+' \u2013 '+m.away_goals+'</span>';
   var stageLbl = m.stage||'';
   var ownersHtml = (ho||ao) ? '<div class="match-owners"><span>'+(ho?'\uD83D\uDC64 '+esc(ho):'')+'</span><span>'+(ao?'\uD83D\uDC64 '+esc(ao):'')+'</span></div>' : '';
   return '<div class="match-card'+(type==='live'?' is-live':'')+'">'
     +'<div class="match-teams"><span class="match-team">'+esc(m.home)+'</span>'+scoreHtml+'<span class="match-team away">'+esc(m.away)+'</span></div>'
     +'<div class="match-meta">'+pill+'<span>'+esc(stageLbl)+'</span><span>'+esc(m.match_date||'')+(m.match_time?' '+esc(m.match_time):'')+'</span></div>'
+    +(penSuffix?'<div style="text-align:center;margin-top:4px">'+penSuffix+'</div>':'')
     +ownersHtml
     +'</div>';
 }
@@ -408,6 +412,21 @@ function scoreRow(m){
   var ag=m.away_goals!==null?m.away_goals:0;
   var phase=getMatchPhase(m);
   var badge=phase==='live'?'<span class="pill pill-live">\u25cf LIVE</span>':phase==='finished'?'<span class="pill pill-ft">FT</span>':'<span class="pill pill-ns">Soon</span>';
+  var stageKey=STAGE_DB_MAP[m.stage]||m.stage;
+  var isKnockout=stageKey!=='GROUP_STAGE';
+  var isDrawn=phase==='finished'&&hg===ag;
+  var penHtml='';
+  if(isKnockout&&isDrawn){
+    var penWinner=m.penalties_winner||'';
+    penHtml='<div class="ser-pens">'
+      +'<span class="ser-pens-label">\u26bd Pens winner:</span>'
+      +'<select class="select-field" style="width:auto;font-size:12px;padding:5px 8px" onchange="savePenaltiesWinner('+m.id+',this.value)">'
+      +'<option value=""'+(penWinner===''?' selected':'')+'>\u2014 select \u2014</option>'
+      +'<option value="'+esc(m.home)+'"'+(penWinner===m.home?' selected':'')+'>'+esc(m.home)+'</option>'
+      +'<option value="'+esc(m.away)+'"'+(penWinner===m.away?' selected':'')+'>'+esc(m.away)+'</option>'
+      +'</select>'
+      +'</div>';
+  }
   return '<div class="score-entry-row">'
     +'<div class="ser-top">'
     +'<span class="score-entry-label">'+esc(m.home)+'</span>'
@@ -421,6 +440,7 @@ function scoreRow(m){
     +'<span class="ser-dash">\u2013</span>'
     +'<div class="score-stepper"><button class="step-btn" onclick="stepScore('+m.id+',\'away\',-1)">-</button><span class="step-val" id="sv-away-'+m.id+'">'+ag+'</span><button class="step-btn" onclick="stepScore('+m.id+',\'away\',1)">+</button></div>'
     +'</div>'
+    +penHtml
     +'</div>';
 }
 
@@ -542,8 +562,22 @@ function saveScoreDirect(id){
   var m=matches.find(function(m){return m.id===id;});
   if(!m) return;
   sbPatch('matches',{id:id},{home_goals:m.home_goals,away_goals:m.away_goals})
-    .then(function(){ flashIndicator('score-ind-'+id); refreshCurrent(); })
+    .then(function(){
+      flashIndicator('score-ind-'+id);
+      if(currentTab==='admin') renderAdmin(); else refreshCurrent();
+    })
     .catch(function(e){ console.error('Score save failed:',e); });
+}
+
+function savePenaltiesWinner(id, team){
+  sbPatch('matches',{id:id},{penalties_winner: team||null})
+    .then(function(){
+      var m=matches.find(function(m){return m.id===id;});
+      if(m) m.penalties_winner=team;
+      showToast(team?'Penalties winner saved: '+team:'Penalties winner cleared','success');
+      refreshCurrent();
+    })
+    .catch(function(e){ showToast('Error: '+e.message,'error'); });
 }
 
 function updateMatchTeams(){
