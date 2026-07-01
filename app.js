@@ -184,8 +184,10 @@ function getTeamScore(team, tables){
       if(finalWinner===team) bonus+=100;
       else bonus+=70;
     } else {
-      // Bonus for appearing in this stage regardless of result
-      bonus+=(STAGE_BONUS[stageKey]||0);
+      // Bonus for progressing THROUGH this stage (i.e. winning it)
+      // Penalties winner also counts as winning
+      var winner = (hg===ag) ? m.penalties_winner : (hg>ag ? m.home : m.away);
+      if(winner===team) bonus+=(STAGE_BONUS[stageKey]||0);
     }
   });
   return {grpPts:row.pts,bonus:bonus,total:row.pts+bonus,gf:row.gf+koGf,ga:row.ga+koGa};
