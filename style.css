@@ -39,9 +39,9 @@ header {
   z-index: 100;
 }
 .header-inner {
-  max-width: 680px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 12px 16px;
+  padding: 12px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -73,7 +73,7 @@ nav {
   -webkit-overflow-scrolling: touch;
 }
 nav::-webkit-scrollbar { display: none; }
-.nav-inner { display: flex; max-width: 680px; margin: 0 auto; padding: 0 8px; gap: 0; }
+.nav-inner { display: flex; max-width: 900px; margin: 0 auto; padding: 0 8px; gap: 0; }
 .tab {
   background: none;
   border: none;
@@ -92,7 +92,7 @@ nav::-webkit-scrollbar { display: none; }
 .tab.admin-tab { margin-left: auto; }
 
 /* ── MAIN ─────────────────────────────────────────────────── */
-main { max-width: 680px; margin: 0 auto; padding: 16px; }
+main { max-width: 900px; margin: 0 auto; padding: 16px 20px; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
@@ -118,7 +118,7 @@ main { max-width: 680px; margin: 0 auto; padding: 16px; }
 /* ── METRICS ─────────────────────────────────────────────── */
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4,1fr);
+  grid-template-columns: repeat(2,1fr);
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -232,7 +232,8 @@ main { max-width: 680px; margin: 0 auto; padding: 16px; }
 
 /* ── GROUPS ──────────────────────────────────────────────── */
 .groups-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-@media (min-width: 560px) { .groups-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 500px) { .groups-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 760px) { .groups-grid { grid-template-columns: 1fr 1fr 1fr; } }
 .group-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
 .group-header { background: var(--navy); color: var(--gold); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 8px 12px; }
 .group-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -581,3 +582,23 @@ footer { text-align: center; padding: 20px; font-size: 12px; color: var(--text-m
   margin-top: 4px;
 }
 .bd-combined strong { color: var(--gold); }
+
+@media (min-width: 480px) { .metrics { grid-template-columns: repeat(4,1fr); } }
+
+@media (min-width: 600px) {
+  .lb-row { padding: 13px 16px; }
+  .lb-name { font-size: 15px; }
+  .lb-pts { font-size: 18px; }
+  .bd-match { font-size: 13px; padding: 5px 8px; }
+  .match-team { font-size: 15px; }
+  .match-score { font-size: 20px; }
+  .metric-value { font-size: 22px; }
+}
+
+@media (max-width: 400px) {
+  .lb-teams { font-size: 10px; }
+  .ser-top { flex-wrap: wrap; }
+  h1 { font-size: 16px; }
+  .pot-amount { font-size: 17px; }
+  .tab { font-size: 12px; padding: 12px 10px; }
+}

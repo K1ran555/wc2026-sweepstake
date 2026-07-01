@@ -478,7 +478,7 @@ function renderGroups(){
       return (tb.pts-ta.pts)||((tb.gf-tb.ga)-(ta.gf-ta.ga))||(tb.gf-ta.gf);
     });
     var maxPlayed = Math.max.apply(null, sorted.map(function(t){ return tables[g][t].p; }));
-    html += '<div class="group-card"><div class="group-header">GROUP '+g+'</div>'
+    html += '<div class="group-card"><div class="group-header">GROUP '+g+'</div><div class="group-table-wrap">'
       +'<table class="group-table"><thead><tr><th>Team</th><th>Owner</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>Pts</th></tr></thead><tbody>';
     sorted.forEach(function(t,i){
       var s=tables[g][t];
@@ -488,7 +488,7 @@ function renderGroups(){
         +'<td>'+s.p+'</td><td>'+s.w+'</td><td>'+s.d+'</td><td>'+s.l+'</td>'
         +'<td>'+s.gf+'</td><td>'+s.ga+'</td><td class="pts-col">'+s.pts+'</td></tr>';
     });
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div></div>';
   });
   html += '</div>';
   document.getElementById('tab-groups').innerHTML = html;
