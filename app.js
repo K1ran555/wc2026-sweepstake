@@ -207,6 +207,150 @@ function computeWorstGD(){
   return lb.slice().sort(function(a,b){ return a.gd!==b.gd ? a.gd-b.gd : b.ga-a.ga; })[0];
 }
 
+
+// ── DETAILED TEAM BREAKDOWN ───────────────────────────────
+function getTeamDetailedBreakdown(team, tables){
+  var g = teamGroup(team);
+  var row = (tables[g]&&tables[g][team]) ? tables[g][team] : {pts:0,gf:0,ga:0,w:0,d:0,l:0};
+
+  // Group matches
+  var groupResults = [];
+  matches.forEach(function(m){
+    if(m.home!==team&&m.away!==team) return;
+    var stageKey = STAGE_DB_MAP[m.stage]||m.stage;
+    if(stageKey!=='GROUP_STAGE') return;
+    if(m.home_goals===null||m.away_goals===null) return;
+    var hg=parseInt(m.home_goals,10), ag=parseInt(m.away_goals,10);
+    var isHome=m.home===team;
+    var scored=isHome?hg:ag, conceded=isHome?ag:hg;
+    var opp=isHome?m.away:m.home;
+    var result=scored>conceded?'W':scored===conceded?'D':'L';
+    var pts=result==='W'?3:result==='D'?1:0;
+    groupResults.push({opp:opp,scored:scored,conceded:conceded,result:result,pts:pts});
+  });
+
+  // Knockout matches
+  var koResults = [];
+  var bonus = 0, koGf=0, koGa=0;
+  var STAGE_LABEL = {
+    'LAST_32':'Round of 32','LAST_16':'Last 16',
+    'QUARTER_FINALS':'Quarter-final','SEMI_FINALS':'Semi-final',
+    'THIRD_PLACE':'3rd Place','FINAL':'Final'
+  };
+  matches.forEach(function(m){
+    if(m.home!==team&&m.away!==team) return;
+    if(m.home_goals===null||m.home_goals===undefined||m.away_goals===null||m.away_goals===undefined) return;
+    var stageKey = STAGE_DB_MAP[m.stage]||m.stage;
+    if(stageKey==='GROUP_STAGE') return;
+    var hg=parseInt(m.home_goals,10), ag=parseInt(m.away_goals,10);
+    if(isNaN(hg)||isNaN(ag)) return;
+    var isHome=m.home===team;
+    var scored=isHome?hg:ag, conceded=isHome?ag:hg;
+    var opp=isHome?m.away:m.home;
+    koGf+=scored; koGa+=conceded;
+    var winner, stageBonus=0, result;
+    if(stageKey==='FINAL'){
+      winner=(hg===ag)?m.penalties_winner:(hg>ag?m.home:m.away);
+      stageBonus=winner===team?100:70;
+    } else {
+      winner=(hg===ag)?m.penalties_winner:(hg>ag?m.home:m.away);
+      stageBonus=winner===team?(STAGE_BONUS[stageKey]||0):0;
+    }
+    var pens=(hg===ag&&m.penalties_winner)?'('+esc(m.penalties_winner)+' won on pens)':'';
+    result=winner===team?'W':'L';
+    if(stageBonus) bonus+=stageBonus;
+    koResults.push({
+      stage:STAGE_LABEL[stageKey]||m.stage,
+      opp:opp,scored:scored,conceded:conceded,
+      result:result,bonus:stageBonus,pens:pens
+    });
+  });
+
+  return {
+    team:team,group:g,
+    grpPts:row.pts,grpGf:row.gf,grpGa:row.ga,
+    groupResults:groupResults,
+    koResults:koResults,
+    bonus:bonus,
+    total:row.pts+bonus,
+    gf:row.gf+koGf,ga:row.ga+koGa,
+    gd:(row.gf+koGf)-(row.ga+koGa)
+  };
+}
+
+function buildBreakdownHtml(name, tables){
+  var p = participants.find(function(x){return x.name===name;});
+  if(!p) return '';
+  var b1=getTeamDetailedBreakdown(p.team,tables);
+  var b2=getTeamDetailedBreakdown(p.team2,tables);
+
+  function teamBlock(b){
+    var html='<div class="bd-team-block">';
+    html+='<div class="bd-team-header">';
+    html+='<span class="bd-team-name">'+esc(b.team)+'</span>';
+    html+='<span class="bd-team-group">Group '+b.group+'</span>';
+    html+='<span class="bd-team-total">'+b.total+'pts</span>';
+    html+='</div>';
+
+    // Group stage results
+    if(b.groupResults.length){
+      html+='<div class="bd-section-label">Group stage &mdash; '+b.grpPts+'pts &nbsp; GF'+b.grpGf+' GA'+b.grpGa+' GD'+(b.grpGd>=0?'+':'')+( b.grpGf-b.grpGa)+'</div>';
+      html+='<div class="bd-matches">';
+      b.groupResults.forEach(function(r){
+        html+='<div class="bd-match">'
+          +'<span class="bd-result bd-result-'+r.result.toLowerCase()+'">'+r.result+'</span>'
+          +'<span class="bd-opp">vs '+esc(r.opp)+'</span>'
+          +'<span class="bd-score">'+r.scored+'&ndash;'+r.conceded+'</span>'
+          +'<span class="bd-pts '+(r.pts>0?'bd-pts-pos':'bd-pts-zero')+'">+'+r.pts+'</span>'
+          +'</div>';
+      });
+      html+='</div>';
+    }
+
+    // Knockout results
+    if(b.koResults.length){
+      html+='<div class="bd-section-label" style="margin-top:8px">Knockout stage</div>';
+      html+='<div class="bd-matches">';
+      b.koResults.forEach(function(r){
+        html+='<div class="bd-match">'
+          +'<span class="bd-result bd-result-'+r.result.toLowerCase()+'">'+r.result+'</span>'
+          +'<span class="bd-opp"><span style="font-size:10px;color:var(--text-muted)">'+esc(r.stage)+'</span> vs '+esc(r.opp)+'</span>'
+          +'<span class="bd-score">'+r.scored+'&ndash;'+r.conceded+(r.pens?' <span style="font-size:10px;color:var(--text-muted)">'+r.pens+'</span>':'')+'</span>'
+          +'<span class="bd-pts '+(r.bonus>0?'bd-pts-pos':'bd-pts-zero')+'">+'+(r.bonus||0)+'</span>'
+          +'</div>';
+      });
+      html+='</div>';
+    }
+
+    // Team totals
+    html+='<div class="bd-team-footer">';
+    html+='<span>GF '+b.gf+' &nbsp; GA '+b.ga+' &nbsp; GD '+(b.gd>=0?'+':'')+b.gd+'</span>';
+    html+='<span class="bd-total-pts">'+b.total+' pts</span>';
+    html+='</div>';
+    html+='</div>';
+    return html;
+  }
+
+  var combined=b1.total+b2.total;
+  var combinedGd=b1.gd+b2.gd;
+  return '<div class="bd-wrap">'
+    +teamBlock(b1)
+    +'<div class="bd-divider"></div>'
+    +teamBlock(b2)
+    +'<div class="bd-combined">'
+    +'<span>Combined total</span>'
+    +'<span><strong>'+combined+'pts</strong> &nbsp; GD '+(combinedGd>=0?'+':'')+combinedGd+'</span>'
+    +'</div>'
+    +'</div>';
+}
+
+var _lbExpandedName = null;
+function toggleLbRow(name){
+  if(_lbExpandedName===name){ _lbExpandedName=null; }
+  else { _lbExpandedName=name; }
+  renderLeaderboard();
+}
+
 // ── LEADERBOARD ───────────────────────────────────────────
 function renderLeaderboard(){
   var el = document.getElementById('tab-leaderboard');
@@ -257,6 +401,7 @@ function renderLeaderboard(){
   if(!lb.length){
     html += '<div class="empty"><div class="empty-icon">\uD83C\uDFC6</div>No participants yet</div>';
   } else {
+    var tables2 = computeGroupTables();
     var medals=['\uD83E\uDD47','\uD83E\uDD48','\uD83E\uDD49'];
     lb.forEach(function(e,i){
       var mv = moveMap[e.name];
@@ -264,7 +409,8 @@ function renderLeaderboard(){
       var pos = i<3 ? medals[i] : (i+1);
       var prizeHtml = (p>0&&i<3) ? '<span class="lb-prize">'+fmt(p*PRIZE_SPLITS[i].pct)+'</span>' : '';
       var gdStr = (e.gd>=0?'+':'')+e.gd;
-      html += '<div class="lb-row'+(i===0?' lb-leader':'')+'">'
+      var isExpanded = _lbExpandedName===e.name;
+      html += '<div class="lb-row'+(i===0?' lb-leader':'')+(isExpanded?' lb-row-open':'')+'" onclick="toggleLbRow(\'' +e.name+ '\')" style="cursor:pointer">'
         +'<span class="lb-pos">'+pos+'</span>'
         +mvHtml
         +'<div class="lb-info">'
@@ -276,10 +422,13 @@ function renderLeaderboard(){
         +'<span class="lb-gd">GD '+gdStr+'</span>'
         +prizeHtml
         +'</div>'
+        +'<span class="lb-chevron">'+(isExpanded?'\u25b2':'\u25bc')+'</span>'
         +'</div>';
+      if(isExpanded){
+        html += '<div class="lb-breakdown">'+buildBreakdownHtml(e.name, tables2)+'</div>';
+      }
     });
   }
-
   el.innerHTML = html;
 }
 
