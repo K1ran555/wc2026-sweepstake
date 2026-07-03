@@ -202,7 +202,15 @@ function computeLeaderboard(){
 }
 
 function computeWorstGD(){
-  var lb = computeLeaderboard();
+  // Worst GD locked at end of group stage — only group stage goals count
+  var tables = computeGroupTables();
+  var lb = participants.filter(function(p){ return p.name; }).map(function(p){
+    var g1=teamGroup(p.team), g2=teamGroup(p.team2);
+    var r1=(tables[g1]&&tables[g1][p.team])||{gf:0,ga:0};
+    var r2=(tables[g2]&&tables[g2][p.team2])||{gf:0,ga:0};
+    var gf=r1.gf+r2.gf, ga=r1.ga+r2.ga;
+    return {name:p.name,team:p.team,team2:p.team2,gf:gf,ga:ga,gd:gf-ga};
+  });
   if(!lb.length) return null;
   return lb.slice().sort(function(a,b){ return a.gd!==b.gd ? a.gd-b.gd : b.ga-a.ga; })[0];
 }
