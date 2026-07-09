@@ -393,6 +393,7 @@ function renderLeaderboard(){
     +'<button class="btn-whatsapp" onclick="shareWhatsApp()">'
     +'<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.122 1.528 5.856L.057 23.882l6.188-1.448A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.86 0-3.604-.504-5.102-1.382l-.366-.217-3.793.888.904-3.7-.238-.38A9.946 9.946 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>'
     +'Share</button>'
+    +'<button class="btn" style="padding:8px 12px;font-size:13px;font-weight:600" onclick="shareFullSnapshot()">📋 Full snapshot</button>'
     +(cdText ? '<span class="lb-countdown">\u23f0 '+esc(next.home)+' vs '+esc(next.away)+' in <strong>'+cdText+'</strong></span>' : '')
     +'<span id="last-updated-display" style="font-size:11px;color:var(--text-muted);margin-left:auto">'+getLastUpdatedText()+'</span>'
     +'</div>';
@@ -930,3 +931,33 @@ setInterval(function(){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){setTimeout(showWhatsNew,800);});
   else setTimeout(showWhatsNew,800);
 })();
+
+function shareFullSnapshot(){
+  var lb=computeLeaderboard();
+  var p=pot();
+  var medals=['\uD83E\uDD47','\uD83E\uDD48','\uD83E\uDD49'];
+  var now=new Date();
+  var dateStr=now.toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  var lines=['\u26BD WC2026 Sweepstake \u2014 Full Standings','\uD83D\uDCC5 '+dateStr,''];
+  lb.forEach(function(e,i){
+    var pos=medals[i]||(i+1)+'.';
+    var gd=(e.gd>=0?'+':'')+e.gd;
+    lines.push(pos+' '+e.name+' \u2014 '+e.total+'pts ('+e.team+' & '+e.team2+') GD:'+gd);
+  });
+  lines.push('');
+  lines.push('\uD83D\uDCB0 Pot: '+fmt(p));
+  var wgd=computeWorstGD();
+  if(wgd) lines.push('\uD83D\uDFE1 Worst GD: '+wgd.name+' ('+(wgd.gd>=0?'+':'')+wgd.gd+')');
+  if(settings.golden_glove_team) lines.push('\uD83E\uDDE4 Glove: '+settings.golden_glove_team);
+  if(settings.golden_boot_team) lines.push('\uD83D\uDC5F Boot: '+settings.golden_boot_team);
+  lines.push('');
+  lines.push('\uD83D\uDD17 https://k1ran555.github.io/wc2026-sweepstake/');
+  var text=lines.join('\n');
+  if(navigator.share){navigator.share({title:'WC2026',text:text}).catch(function(){copyToClipboard(text);showToast('Copied!','success');});}
+  else{copyToClipboard(text);showToast('Snapshot copied!','success');}
+}
+
+function copyToClipboard(text){
+  if(navigator.clipboard){navigator.clipboard.writeText(text).catch(function(){});}
+  else{var t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();}
+}
