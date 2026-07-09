@@ -198,7 +198,7 @@ function computeLeaderboard(){
   return participants.filter(function(p){ return p.name; }).map(function(p){
     var s1=getTeamScore(p.team,tables), s2=getTeamScore(p.team2,tables);
     return {name:p.name,team:p.team,team2:p.team2,t1pts:s1.total,t2pts:s2.total,total:s1.total+s2.total,gf:s1.gf+s2.gf,ga:s1.ga+s2.ga,gd:(s1.gf+s2.gf)-(s1.ga+s2.ga)};
-  }).sort(function(a,b){ return b.total!==a.total ? b.total-a.total : b.gf-a.gf; });
+  }).sort(function(a,b){ return b.total!==a.total ? b.total-a.total : b.gd!==a.gd ? b.gd-a.gd : b.gf-a.gf; });
 }
 
 function computeWorstGD(){
