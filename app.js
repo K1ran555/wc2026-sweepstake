@@ -532,6 +532,7 @@ function renderPrizes(){
     +'<div class="metric"><div class="metric-label">Paid in</div><div class="metric-value">'+namedCount()+'</div></div>'
     +'</div>'
     +'<div class="section-label">Prize breakdown</div><div class="card prizes-breakdown">';
+  html += '<div style="text-align:center;margin-bottom:14px"><button class="btn gold" style="padding:10px 20px;font-size:14px" onclick="sharePrizeCard()">Download prize card &#x1F3C6;</button></div>';
 
   PRIZE_SPLITS.forEach(function(sp,i){
     html += '<div class="lb-row">'
@@ -554,7 +555,7 @@ function renderPrizes(){
   html += '<div class="section-label" style="margin-top:1.5rem">Golden glove &amp; golden boot</div>'
     +'<div class="card"><p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Select the team whose player won each award.</p>'
     +'<div class="two-col">'
-    +'<div><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">\u26bd Best goal \u2014 team</div>'
+    +'<div><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">\uD83E\uDDE4 Golden glove \u2014 team</div>'
     +'<select class="select-field" onchange="updateSetting(\'golden_glove_team\',this.value)" '+disabled+'>'
     +'<option value="">\u2014 not yet awarded \u2014</option>'+teamOpts+'</select></div>'
     +'<div><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">\uD83D\uDC5F Golden boot \u2014 team</div>'
@@ -961,3 +962,113 @@ function copyToClipboard(text){
   if(navigator.clipboard){navigator.clipboard.writeText(text).catch(function(){});}
   else{var t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();}
 }
+
+function sharePrizeCard(){
+  var lb=computeLeaderboard();
+  var p=pot();
+  var wgd=computeWorstGD();
+  var canvas=document.createElement('canvas');
+  var W=600,H=520;
+  canvas.width=W; canvas.height=H;
+  var ctx=canvas.getContext('2d');
+
+  ctx.fillStyle='#0d1117';
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#c9a84c';
+  ctx.lineWidth=3;
+  ctx.strokeRect(6,6,W-12,H-12);
+
+  ctx.fillStyle='#c9a84c';
+  ctx.font='bold 20px system-ui,sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('\u26BD WC2026 Sweepstake \u2014 Final Standings',W/2,42);
+  ctx.fillStyle='#8b949e';
+  ctx.font='12px system-ui,sans-serif';
+  var now=new Date();
+  ctx.fillText(now.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}),W/2,60);
+
+  ctx.strokeStyle='#30363d'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(30,72); ctx.lineTo(W-30,72); ctx.stroke();
+
+  var medals=['\uD83E\uDD47','\uD83E\uDD48','\uD83E\uDD49'];
+  var prizes=[p*0.40,p*0.25,p*0.15];
+  var y=96;
+
+  lb.slice(0,3).forEach(function(e,i){
+    ctx.fillStyle=i===0?'rgba(201,168,76,0.12)':i===1?'rgba(150,150,150,0.08)':'rgba(180,100,50,0.08)';
+    ctx.beginPath();
+    if(ctx.roundRect){ctx.roundRect(24,y-20,W-48,44,6);}else{ctx.rect(24,y-20,W-48,44);}
+    ctx.fill();
+    ctx.font='22px serif';
+    ctx.textAlign='left';
+    ctx.fillText(medals[i],32,y+8);
+    ctx.fillStyle='#e6edf3';
+    ctx.font='bold 15px system-ui,sans-serif';
+    ctx.fillText(e.name,62,y+2);
+    ctx.fillStyle='#8b949e';
+    ctx.font='11px system-ui,sans-serif';
+    ctx.fillText(e.team+' & '+e.team2,62,y+16);
+    ctx.fillStyle='#c9a84c';
+    ctx.font='bold 16px system-ui,sans-serif';
+    ctx.textAlign='right';
+    ctx.fillText(e.total+'pts',W-110,y+2);
+    ctx.fillStyle='#3fb950';
+    ctx.font='bold 15px system-ui,sans-serif';
+    ctx.fillText('\u00a3'+Math.round(prizes[i]),W-30,y+2);
+    y+=52;
+  });
+
+  ctx.strokeStyle='#30363d'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(30,y+2); ctx.lineTo(W-30,y+2); ctx.stroke();
+  y+=20;
+
+  var specials=[
+    ['\uD83E\uDDE4','Golden Glove',settings.golden_glove_team?ownersOfTeam(settings.golden_glove_team).join(' & '):'TBD',Math.round(p*0.065)],
+    ['\uD83D\uDC5F','Golden Boot',settings.golden_boot_team?ownersOfTeam(settings.golden_boot_team).join(' & '):'TBD',Math.round(p*0.065)],
+    ['\uD83D\uDFE1','Worst GD',wgd?wgd.name+' (GD '+(wgd.gd>=0?'+':'')+wgd.gd+')':'TBD',Math.round(p*0.07)],
+  ];
+
+  specials.forEach(function(s){
+    ctx.font='18px serif';
+    ctx.textAlign='left';
+    ctx.fillText(s[0],32,y+8);
+    ctx.fillStyle='#8b949e';
+    ctx.font='11px system-ui,sans-serif';
+    ctx.fillText(s[1],58,y);
+    ctx.fillStyle='#e6edf3';
+    ctx.font='bold 13px system-ui,sans-serif';
+    ctx.fillText(s[2],58,y+14);
+    ctx.fillStyle='#3fb950';
+    ctx.font='bold 15px system-ui,sans-serif';
+    ctx.textAlign='right';
+    ctx.fillText('\u00a3'+s[3],W-30,y+8);
+    y+=42;
+  });
+
+  ctx.strokeStyle='#30363d'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(30,y+4); ctx.lineTo(W-30,y+4); ctx.stroke();
+  y+=20;
+  ctx.fillStyle='#8b949e';
+  ctx.font='12px system-ui,sans-serif';
+  ctx.textAlign='left';
+  ctx.fillText('Total pot',32,y+6);
+  ctx.fillStyle='#c9a84c';
+  ctx.font='bold 18px system-ui,sans-serif';
+  ctx.textAlign='right';
+  ctx.fillText(fmt(p),W-30,y+6);
+
+  ctx.fillStyle='#8b949e';
+  ctx.font='10px system-ui,sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('k1ran555.github.io/wc2026-sweepstake',W/2,H-14);
+
+  canvas.toBlob(function(blob){
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download='wc2026-prize-card.png';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
+    showToast('Prize card downloaded!','success');
+  },'image/png');
+}
+
